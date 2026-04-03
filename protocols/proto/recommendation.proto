@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package rec.recommendation;
+
+import "common.proto";
+
+message RecItem {
+  string item_id = 1;
+  double score = 2;
+  string source = 3;
+  string summary = 4;
+}
+
+message RecRequest {
+  rec.common.RequestHeader header = 1;
+  string query = 2;  // 搜索场景
+}
+
+message RecResponse {
+  string request_id = 1;
+  repeated RecItem items = 2;
+  string trace_id = 3;
+  int32 total = 4;
+  bool has_more = 5;
+}

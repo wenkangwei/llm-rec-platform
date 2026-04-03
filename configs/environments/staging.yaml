@@ -1,0 +1,18 @@
+# 预发布环境覆盖
+server:
+  host: "0.0.0.0"
+  port: 8000
+  log_level: "INFO"
+
+storage:
+  redis:
+    host: "redis-staging.internal"
+    port: 6379
+  mysql:
+    host: "mysql-staging.internal"
+    port: 3306
+
+monitor:
+  sinks:
+    - type: "clickhouse"
+      host: "clickhouse-staging.internal"

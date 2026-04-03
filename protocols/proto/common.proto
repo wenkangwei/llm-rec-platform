@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package rec.common;
+
+message RequestHeader {
+  string request_id = 1;
+  string user_id = 2;
+  string scene = 3;
+  int32 page = 4;
+  int32 page_size = 5;
+}
+
+message Empty {}

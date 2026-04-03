@@ -1,0 +1,37 @@
+# 模型定义
+two_tower:
+  name: "two_tower"
+  version: "v1"
+  type: "recall"
+  backend: "torch"
+  path: "models/two_tower_v1.pt"
+  input_dim: 128
+  output_dim: 64
+  warmup_samples: 100
+
+dcn:
+  name: "dcn"
+  version: "v1"
+  type: "rank"
+  backend: "torch"
+  path: "models/dcn_v2_v1.pt"
+  input_dim: 256
+  cross_layers: 3
+  deep_layers: [256, 128, 64]
+
+din:
+  name: "din"
+  version: "v1"
+  type: "rank"
+  backend: "torch"
+  path: "models/din_v1.pt"
+  embedding_dim: 64
+  attention_hidden_units: [64, 32]
+
+lightgbm:
+  name: "lightgbm"
+  version: "v1"
+  type: "prerank"
+  backend: "lightgbm"
+  path: "models/lightgbm_v1.txt"
+  num_features: 128

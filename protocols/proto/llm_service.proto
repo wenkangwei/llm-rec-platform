@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package rec.llm;
+
+message GenerateRequest {
+  string prompt = 1;
+  string model = 2;
+  int32 max_tokens = 3;
+  double temperature = 4;
+}
+
+message GenerateResponse {
+  string text = 1;
+  int32 tokens_used = 2;
+}
+
+message EmbedRequest {
+  repeated string texts = 1;
+  string model = 2;
+}
+
+message EmbedResponse {
+  repeated Embedding embeddings = 1;
+}
+
+message Embedding {
+  repeated float values = 1;
+}
+
+service LLMService {
+  rpc Generate(GenerateRequest) returns (GenerateResponse);
+  rpc Embed(EmbedRequest) returns (EmbedResponse);
+}

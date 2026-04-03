@@ -1,0 +1,23 @@
+# 存储后端配置
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  password: null
+  pool_size: 10
+  timeout_ms: 100
+
+mysql:
+  host: "localhost"
+  port: 3306
+  user: "rec_user"
+  password: "rec_pass"
+  database: "rec_platform"
+  pool_size: 5
+
+clickhouse:
+  host: "localhost"
+  port: 9000
+  user: "default"
+  password: ""
+  database: "rec_monitor"

@@ -1,0 +1,17 @@
+# 开发环境覆盖
+server:
+  host: "127.0.0.1"
+  port: 8000
+  log_level: "DEBUG"
+
+storage:
+  redis:
+    host: "localhost"
+    port: 6379
+  mysql:
+    host: "localhost"
+    port: 3306
+
+llm:
+  backend:
+    base_url: "http://localhost:8001/v1"

@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package rec.feature;
+
+message FeatureGetRequest {
+  string entity_id = 1;
+  repeated string feature_names = 2;
+}
+
+message FeatureBatchGetRequest {
+  repeated string entity_ids = 1;
+  repeated string feature_names = 2;
+}
+
+message FeatureResponse {
+  map<string, string> features = 1;  // JSON encoded values
+}
+
+message FeatureBatchResponse {
+  repeated FeatureResponse entities = 1;
+}
+
+service FeatureService {
+  rpc GetFeatures(FeatureGetRequest) returns (FeatureResponse);
+  rpc BatchGetFeatures(FeatureBatchGetRequest) returns (FeatureBatchResponse);
+}

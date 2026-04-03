@@ -1,0 +1,60 @@
+# 召回通道配置 + 权重
+channels:
+  personalized:
+    enabled: true
+    weight: 0.30
+    class: "pipeline.recall.personalized.PersonalizedRecall"
+    params:
+      top_k: 500
+      index_type: "faiss_ivf"
+
+  collaborative:
+    enabled: true
+    weight: 0.20
+    class: "pipeline.recall.collaborative.CollaborativeRecall"
+    params:
+      top_k: 300
+      similarity_threshold: 0.5
+
+  social:
+    enabled: true
+    weight: 0.15
+    class: "pipeline.recall.social.SocialRecall"
+    params:
+      top_k: 200
+      recent_hours: 24
+
+  community:
+    enabled: true
+    weight: 0.10
+    class: "pipeline.recall.community.CommunityRecall"
+    params:
+      top_k: 200
+
+  hot:
+    enabled: true
+    weight: 0.10
+    class: "pipeline.recall.hot.HotRecall"
+    params:
+      top_k: 200
+      window_hours: 6
+
+  operator:
+    enabled: true
+    weight: 0.05
+    class: "pipeline.recall.operator.OperatorRecall"
+    params:
+      top_k: 50
+
+  cold_start:
+    enabled: true
+    weight: 0.10
+    class: "pipeline.recall.cold_start.ColdStartRecall"
+    params:
+      top_k: 200
+      explore_ratio: 0.1
+
+# 合并去重配置
+merger:
+  max_candidates: 3000
+  dedup_by: "item_id"

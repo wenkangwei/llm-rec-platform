@@ -1,0 +1,36 @@
+# LLM 推荐系统平台 — 主配置入口（根节点）
+# 通过 ${path:key} 引用子配置文件，形成图依赖结构
+
+server:
+  host: ${server/server.yaml:host}
+  port: ${server/server.yaml:port}
+  workers: ${server/server.yaml:workers}
+  log_level: ${server/server.yaml:log_level}
+
+storage:
+  redis: ${storage/storage.yaml:redis}
+  mysql: ${storage/storage.yaml:mysql}
+  clickhouse: ${storage/storage.yaml:clickhouse}
+
+models:
+  two_tower: ${model/models.yaml:two_tower}
+  dcn: ${model/models.yaml:dcn}
+  din: ${model/models.yaml:din}
+  lightgbm: ${model/models.yaml:lightgbm}
+
+pipeline:
+  stages: ${pipeline/pipeline.yaml:stages}
+  recall: ${pipeline/recall.yaml}
+  ranking: ${pipeline/ranking.yaml}
+
+features:
+  registry: ${feature/features.yaml:features}
+
+llm:
+  backend: ${llm/llm.yaml:backend}
+  models: ${llm/llm.yaml:models}
+
+monitor:
+  enabled: ${monitor/monitor.yaml:enabled}
+  sinks: ${monitor/monitor.yaml:sinks}
+  metrics: ${monitor/monitor.yaml:metrics}

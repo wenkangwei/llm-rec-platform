@@ -1,0 +1,21 @@
+# 链路编排 — 推荐请求经过的阶段
+stages:
+  - name: "recall"
+    class: "pipeline.recall.merger.RecallMerger"
+    timeout_ms: 50
+
+  - name: "prerank"
+    class: "pipeline.ranking.prerank.PreRankStage"
+    timeout_ms: 10
+
+  - name: "rank"
+    class: "pipeline.ranking.rank.RankStage"
+    timeout_ms: 50
+
+  - name: "rerank"
+    class: "pipeline.ranking.rerank.ReRankStage"
+    timeout_ms: 10
+
+  - name: "mixer"
+    class: "pipeline.ranking.mixer.MixerStage"
+    timeout_ms: 10

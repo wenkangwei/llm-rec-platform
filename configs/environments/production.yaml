@@ -1,0 +1,22 @@
+# 生产环境覆盖
+server:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  log_level: "WARNING"
+
+storage:
+  redis:
+    host: "redis.internal"
+    port: 6379
+    pool_size: 20
+  mysql:
+    host: "mysql.internal"
+    port: 3306
+    pool_size: 10
+
+monitor:
+  sinks:
+    - type: "clickhouse"
+      host: "clickhouse.internal"
+      batch_size: 5000

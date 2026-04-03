@@ -1,0 +1,21 @@
+# LLM 配置（OpenAI 兼容协议）
+backend:
+  type: "openai_compatible"
+  base_url: "http://localhost:8001/v1"
+  api_key: "EMPTY"
+  timeout_sec: 30
+  max_retries: 2
+
+models:
+  chat:
+    name: "qwen2.5-7b-instruct"
+    max_tokens: 2048
+    temperature: 0.7
+  embedding:
+    name: "bge-large-zh-v1.5"
+    dimension: 1024
+    batch_size: 32
+
+agent:
+  max_iterations: 5
+  verbose: true

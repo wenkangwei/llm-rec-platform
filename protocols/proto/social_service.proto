@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package rec.social;
+
+message SocialGraphRequest {
+  string user_id = 1;
+  int32 depth = 2;
+}
+
+message SocialGraphResponse {
+  repeated string following_ids = 1;
+  repeated string follower_ids = 2;
+  repeated string mutual_ids = 3;
+  repeated string community_ids = 4;
+}
+
+message InteractionRequest {
+  string user_id = 1;
+  repeated string target_ids = 2;
+  string interaction_type = 3;  // like, comment, share
+}
+
+message InteractionResponse {
+  map<string, double> strengths = 1;  // target_id -> strength
+}
+
+service SocialService {
+  rpc GetSocialGraph(SocialGraphRequest) returns (SocialGraphResponse);
+  rpc GetInteractionStrength(InteractionRequest) returns (InteractionResponse);
+}

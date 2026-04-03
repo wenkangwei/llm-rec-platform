@@ -1,0 +1,76 @@
+# 特征注册表
+features:
+  user_basic:
+    type: "user"
+    source: "mysql"
+    fields:
+      - name: "user_id"
+        dtype: "string"
+      - name: "age"
+        dtype: "int"
+      - name: "gender"
+        dtype: "string"
+      - name: "interests"
+        dtype: "array"
+
+  user_realtime:
+    type: "user"
+    source: "redis"
+    fields:
+      - name: "recent_click_items"
+        dtype: "array"
+      - name: "session_duration"
+        dtype: "float"
+      - name: "click_count_24h"
+        dtype: "int"
+
+  item_basic:
+    type: "item"
+    source: "mysql"
+    fields:
+      - name: "item_id"
+        dtype: "string"
+      - name: "content_type"
+        dtype: "string"
+      - name: "tags"
+        dtype: "array"
+      - name: "author_id"
+        dtype: "string"
+
+  item_stats:
+    type: "item"
+    source: "redis"
+    fields:
+      - name: "like_count"
+        dtype: "int"
+      - name: "view_count"
+        dtype: "int"
+      - name: "engagement_rate"
+        dtype: "float"
+
+  context:
+    type: "context"
+    source: "context"
+    fields:
+      - name: "hour_of_day"
+        dtype: "int"
+      - name: "day_of_week"
+        dtype: "int"
+      - name: "device_type"
+        dtype: "string"
+
+  user_embedding:
+    type: "user"
+    source: "faiss"
+    fields:
+      - name: "embedding"
+        dtype: "array"
+        dimension: 128
+
+  item_embedding:
+    type: "item"
+    source: "faiss"
+    fields:
+      - name: "embedding"
+        dtype: "array"
+        dimension: 128

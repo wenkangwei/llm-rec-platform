@@ -1,0 +1,34 @@
+# 排序配置
+prerank:
+  model: ${model/models.yaml:lightgbm}
+  max_candidates: 1000
+  score_threshold: 0.1
+
+rank:
+  model: ${model/models.yaml:dcn}
+  max_candidates: 200
+  batch_size: 64
+
+rerank:
+  diversity:
+    enabled: true
+    same_author_max: 2
+    same_tag_max: 3
+    mmr_lambda: 0.5
+  fatigue:
+    enabled: true
+    recent_expose_window: 100
+    max_repeat: 2
+  boost:
+    new_content_weight: 1.2
+    followed_author_weight: 1.1
+
+mixer:
+  strategy: "weighted_round_robin"
+  slots:
+    - content_type: "article"
+      ratio: 0.5
+    - content_type: "video"
+      ratio: 0.3
+    - content_type: "post"
+      ratio: 0.2
