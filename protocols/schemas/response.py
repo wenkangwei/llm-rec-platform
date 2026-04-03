@@ -1,4 +1,7 @@
-"""推荐响应 Schema — HTTP 接口出参"""
+"""HTTP 响应 Schema — 仅负责接口出参格式化。
+
+与内部 RecContext 解耦，转换逻辑见 protocols.schemas.converters。
+"""
 
 from __future__ import annotations
 
