@@ -36,6 +36,7 @@ class SearchResponse(BaseModel):
     items: list[RecItem]
     trace_id: Optional[str] = None
     total: int = 0
+    summary: Optional[str] = None
 
 
 class TrackResponse(BaseModel):

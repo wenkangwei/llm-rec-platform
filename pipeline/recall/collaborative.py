@@ -51,6 +51,17 @@ class CollaborativeRecall(PipelineStage):
         return ctx
 
     def _get_similar_items(self, item_id: str) -> list[tuple[str, float]]:
-        """获取相似物品列表。生产环境从 Redis/内存加载。"""
-        # TODO: 从预计算的相似度矩阵加载
+        """获取相似物品列表。生产环境从预计算矩阵加载。"""
+        if self._similarity_matrix is not None:
+            return self._similarity_matrix.get(item_id, [])
+        try:
+            import json
+            from storage.redis import get_redis
+            redis = get_redis()
+            if redis:
+                raw = redis.get(f"item_sim:{item_id}")
+                if raw:
+                    return [(r[0], r[1]) for r in json.loads(raw)]
+        except Exception:
+            pass
         return []

@@ -40,6 +40,17 @@ class SocialRecall(PipelineStage):
         return ctx
 
     def _fetch_following_interactions(self, following_ids: list[str]) -> list[tuple[str, float, str]]:
-        """获取关注者最近交互的内容。生产环境从 Redis 查询。"""
-        # TODO: 从 Redis 获取关注者最近交互内容
+        """获取关注者最近交互的内容。"""
+        try:
+            from storage.redis import get_redis
+            redis = get_redis()
+            if redis:
+                results = []
+                for uid in following_ids[:50]:
+                    raw = redis.zrevrange(f"user_interactions:{uid}", 0, 20, withscores=True)
+                    if raw:
+                        results.extend((item_id, score, "interact") for item_id, score in raw)
+                return sorted(results, key=lambda x: -x[1])
+        except Exception:
+            pass
         return []

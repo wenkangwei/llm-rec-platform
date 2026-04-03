@@ -31,10 +31,20 @@ class HotRecall(PipelineStage):
         return ctx
 
     def _get_hot_items(self) -> list[tuple[str, float]]:
-        """获取热门物品列表。生产环境从 Redis 加载。"""
+        """获取热门物品列表。生产环境从 Redis 加载，开发环境用内存缓存。"""
         if self._hot_items:
             return self._hot_items
-        # TODO: 从 Redis 加载实时热度排行
+        try:
+            from storage.redis import get_redis
+            redis = get_redis()
+            if redis:
+                raw = redis.zrevrange("hot_items:global", 0, self._top_k - 1, withscores=True)
+                if raw:
+                    self._hot_items = [(item_id, score) for item_id, score in raw]
+                    return self._hot_items
+        except Exception:
+            pass
+        logger.warning("Redis 不可用，使用内存缓存（可能为空）")
         return []
 
     def update_hot_items(self, items: list[tuple[str, float]]) -> None:

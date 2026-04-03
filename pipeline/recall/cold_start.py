@@ -66,12 +66,28 @@ class ColdStartRecall(PipelineStage):
 
     def _get_hot_items(self) -> list[tuple[str, float]]:
         """获取热门物品。"""
-        # TODO: 从 Redis 获取
+        try:
+            from storage.redis import get_redis
+            redis = get_redis()
+            if redis:
+                raw = redis.zrevrange("hot_items:global", 0, self._top_k - 1, withscores=True)
+                if raw:
+                    return [(item_id, score) for item_id, score in raw]
+        except Exception:
+            pass
         return []
 
     def _get_explore_items(self, count: int) -> list[tuple[str, float]]:
         """随机探索物品。"""
-        # TODO: 从物品池随机采样
+        try:
+            from storage.redis import get_redis
+            redis = get_redis()
+            if redis:
+                item_ids = redis.srandmember("item_pool:all", count)
+                if item_ids:
+                    return [(iid, random.uniform(0.3, 0.6)) for iid in item_ids]
+        except Exception:
+            pass
         return []
 
     def update_new_items(self, items: list[tuple[str, float]]) -> None:

@@ -29,5 +29,8 @@ async def search(req: SearchRequest, request: Request) -> SearchResponse:
 
     # TODO: Phase 4 — LLM 搜索重排摘要（对 ctx.candidates 生成 summary）
 
-    # RecContext → HTTP Response
-    return context_to_search_response(ctx)
+    # RecContext → HTTP Response（含 LLM 摘要）
+    resp = context_to_search_response(ctx)
+    if ctx.extras.get("search_summary"):
+        resp.summary = ctx.extras["search_summary"]
+    return resp

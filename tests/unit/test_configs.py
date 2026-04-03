@@ -102,6 +102,15 @@ class TestConfigLoader:
         result = loader._resolve_refs(data)
         assert result == ["1", "2"]
 
+    def test_resolve_refs_preserves_dict_type(self):
+        """验证 ${path:key} 引用解析保留 dict 类型而非转为 str。"""
+        loader = ConfigLoader()
+        loader._cache["test.yaml"] = {"models": {"two_tower": {"name": "two_tower", "dim": 64}}}
+        data = {"models": {"two_tower": "${test.yaml:models.two_tower}"}}
+        result = loader._resolve_refs(data)
+        assert isinstance(result["models"]["two_tower"], dict)
+        assert result["models"]["two_tower"]["dim"] == 64
+
 
 class TestAppConfig:
     """AppConfig Schema 测试。"""

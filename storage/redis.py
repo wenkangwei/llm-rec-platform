@@ -9,6 +9,20 @@ from utils.logger import get_struct_logger
 
 logger = get_struct_logger("storage.redis")
 
+# 全局 Redis 客户端引用（由 lifespan 初始化）
+_redis_client = None
+
+
+def get_redis():
+    """获取 Redis 同步客户端（用于召回模块）。返回 None 表示不可用。"""
+    return _redis_client
+
+
+def set_redis(client) -> None:
+    """设置全局 Redis 客户端引用。"""
+    global _redis_client
+    _redis_client = client
+
 
 class RedisStore:
     """Redis 异步存储封装。"""

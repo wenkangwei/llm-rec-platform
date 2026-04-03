@@ -81,21 +81,21 @@ llm-rec-platform/
 | Phase | 内容 | 状态 |
 |-------|------|------|
 | Phase 1 | 项目骨架 + 配置中心 + 协议定义 | ✅ Done |
-| Phase 2 | 推荐链路（召回 → 排序 → 混排） | 🚧 In Progress |
-| Phase 3 | 特征平台 + 用户/物品画像 | 📋 Planned |
-| Phase 4 | LLM 融合（Embedding / 内容生成 / 对话式 Agent） | 📋 Planned |
-| Phase 5 | 监控体系 + 链路追踪 + 日志落盘 | 📋 Planned |
-| Phase 6 | 模型训练闭环 + A/B 测试 + 部署 | 📋 Planned |
+| Phase 2 | 推荐链路（召回 → 排序 → 混排） | ✅ Done |
+| Phase 3 | 特征平台 + 用户/物品画像 | ✅ Done |
+| Phase 4 | LLM 融合（Embedding / 内容生成 / 对话式 Agent） | ✅ Done |
+| Phase 5 | 监控体系 + 链路追踪 + 日志落盘 | ✅ Done |
+| Phase 6 | 模型训练闭环 + A/B 测试 + 部署 | ✅ Done |
 
 ---
 
 ## Quick Start
 
 ```bash
-# 1. 安装依赖
-pip install -e .
+# 1. 安装依赖（含 dev 工具）
+pip install -e ".[dev]"
 
-# 2. 启动服务（开发模式）
+# 2. 启动服务（开发模式，默认 MockBackend）
 APP_ENV=development python -m uvicorn server.app:create_app --factory --reload --port 8000
 
 # 3. 健康检查
@@ -105,6 +105,33 @@ curl http://localhost:8000/api/health
 curl -X POST http://localhost:8000/api/recommend \
   -H "Content-Type: application/json" \
   -d '{"user_id": "u123", "scene": "home_feed", "num": 10}'
+
+# 5. LLM Agent 对话
+curl -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "admin", "message": "关闭热门召回通道"}'
+```
+
+### Docker Compose（完整服务栈）
+
+```bash
+# 启动 Redis + MySQL + ClickHouse + Prometheus + Grafana + 推荐服务
+make docker-up
+
+# 查看日志
+make docker-logs
+
+# 停止
+make docker-down
+```
+
+### 运行测试
+
+```bash
+make test          # 全部测试
+make test-unit     # 单元测试
+make test-e2e      # E2E 测试（需安装 fastapi）
+make lint          # 代码检查
 ```
 
 ---

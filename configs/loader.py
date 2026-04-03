@@ -111,9 +111,16 @@ class ConfigLoader:
     def _resolve_refs(self, data: Any) -> Any:
         """递归解析 ${path:key} 和 ${env:VAR:default} 引用。"""
         if isinstance(data, str):
-            # 解析文件引用
+            # 如果整个字符串恰好是一个引用，保留原始类型（dict/list/int 等）
+            path_match = _PATH_REF_RE.fullmatch(data.strip())
+            if path_match:
+                value = self._resolve_path_value(path_match)
+                if value is not None and not isinstance(value, str):
+                    return self._resolve_refs(value)
+                if isinstance(value, str):
+                    return value
+            # 部分引用（字符串内嵌引用），替换为字符串
             data = _PATH_REF_RE.sub(self._resolve_path_ref, data)
-            # 解析环境变量引用
             data = _ENV_REF_RE.sub(self._resolve_env_ref, data)
             return data
         if isinstance(data, dict):
@@ -122,21 +129,22 @@ class ConfigLoader:
             return [self._resolve_refs(v) for v in data]
         return data
 
-    def _resolve_path_ref(self, match: re.Match) -> str:
-        """解析单个 ${path:key} 引用。"""
+    def _resolve_path_value(self, match: re.Match) -> Any:
+        """解析路径引用，返回原始类型值。"""
         ref_path = match.group(1)
         ref_key = match.group(2)
-
         if ref_path not in self._cache:
             full_path = self._root / ref_path
             try:
                 self._cache[ref_path] = load_yaml(full_path)
             except ConfigLoadError:
                 logger.warning(f"引用的配置文件不存在: {ref_path}")
-                return match.group(0)
+                return None
+        return _get_nested(self._cache[ref_path], ref_key)
 
-        ref_data = self._cache[ref_path]
-        value = _get_nested(ref_data, ref_key)
+    def _resolve_path_ref(self, match: re.Match) -> str:
+        """解析单个 ${path:key} 引用，返回字符串。"""
+        value = self._resolve_path_value(match)
         return str(value) if value is not None else match.group(0)
 
     @staticmethod

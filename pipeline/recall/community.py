@@ -39,5 +39,16 @@ class CommunityRecall(PipelineStage):
 
     def _fetch_community_hot(self, community_ids: list[str]) -> list[tuple[str, float, str]]:
         """获取社区热门内容。"""
-        # TODO: 从 Redis 查询社区热门内容
+        try:
+            from storage.redis import get_redis
+            redis = get_redis()
+            if redis:
+                results = []
+                for cid in community_ids:
+                    raw = redis.zrevrange(f"community_hot:{cid}", 0, self._top_k - 1, withscores=True)
+                    if raw:
+                        results.extend((item_id, score, cid) for item_id, score in raw)
+                return sorted(results, key=lambda x: -x[1])
+        except Exception:
+            pass
         return []
