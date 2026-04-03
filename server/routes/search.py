@@ -1,9 +1,10 @@
-"""搜索推荐路由"""
+"""搜索推荐路由 — HTTP Request → RecContext → Pipeline → SearchResponse"""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
 
+from protocols.schemas.converters import context_to_search_response, search_to_context
 from protocols.schemas.request import SearchRequest
 from protocols.schemas.response import SearchResponse
 
@@ -12,14 +13,21 @@ router = APIRouter()
 
 @router.post("/search", response_model=SearchResponse)
 async def search(req: SearchRequest, request: Request) -> SearchResponse:
-    """搜索推荐接口 — 基于 query 的个性化搜索结果排序。
+    """搜索推荐接口。
 
-    当前为骨架实现。后续 Phase 接入搜索链路 + LLM 摘要。
+    流程: HTTP SearchRequest → search_to_context() → PipelineExecutor → context_to_search_response()
     """
-    # TODO: Phase 2/4 接入搜索链路 + LLM 搜索重排摘要
-    return SearchResponse(
-        request_id=getattr(request.state, "request_id", ""),
-        query=req.query,
-        items=[],
-        total=0,
-    )
+    request_id = getattr(request.state, "request_id", "")
+
+    # HTTP → RecContext
+    ctx = search_to_context(req, request_id)
+
+    # Pipeline 执行
+    executor = getattr(request.app.state, "pipeline_executor", None)
+    if executor:
+        ctx = await executor.execute(ctx)
+
+    # TODO: Phase 4 — LLM 搜索重排摘要（对 ctx.candidates 生成 summary）
+
+    # RecContext → HTTP Response
+    return context_to_search_response(ctx)

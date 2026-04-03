@@ -1,0 +1,118 @@
+version: "3.9"
+
+services:
+  # ===== 推荐服务 =====
+  rec-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"   # HTTP API
+      - "9090:9090"   # Prometheus metrics
+    environment:
+      - APP_ENV=production
+      - REDIS_HOST=redis
+      - MYSQL_HOST=mysql
+      - CLICKHOUSE_HOST=clickhouse
+    depends_on:
+      redis:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 8G
+
+  # ===== LLM 推理服务 (vLLM) =====
+  llm-server:
+    image: vllm/vllm-openai:latest
+    ports:
+      - "8001:8000"
+    environment:
+      - MODEL=qwen2.5-7b-instruct
+    volumes:
+      - model-cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: 16G
+    restart: unless-stopped
+
+  # ===== Redis =====
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  # ===== MySQL =====
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root_pass
+      MYSQL_DATABASE: rec_platform
+      MYSQL_USER: rec_user
+      MYSQL_PASSWORD: rec_pass
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      retries: 10
+    volumes:
+      - mysql-data:/var/lib/mysql
+    restart: unless-stopped
+
+  # ===== ClickHouse =====
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.1
+    ports:
+      - "8123:8123"   # HTTP
+      - "9000:9000"   # Native
+    environment:
+      CLICKHOUSE_DB: rec_monitor
+    volumes:
+      - ch-data:/var/lib/clickhouse
+    restart: unless-stopped
+
+  # ===== Prometheus =====
+  prometheus:
+    image: prom/prometheus:v2.50.0
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./conf/prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: unless-stopped
+
+  # ===== Grafana =====
+  grafana:
+    image: grafana/grafana:10.3.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+      - clickhouse
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  mysql-data:
+  ch-data:
+  model-cache:
