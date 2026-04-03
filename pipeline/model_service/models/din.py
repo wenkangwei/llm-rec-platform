@@ -85,9 +85,11 @@ class DINModel(ModelService):
                 half = x.shape[-1] // 2
                 item_emb = x[:, :half]
                 behavior_pool = x[:, half:]
+                # AttentionLayer.forward expects item_emb [B, D], behavior_emb [B, T, D]
+                # Pass behavior_pool as [B, 1, D] for single behavior
                 interest = self_inner.attention(
-                    item_emb.unsqueeze(1) if item_emb.dim() == 2 else item_emb,
-                    behavior_pool.unsqueeze(1) if behavior_pool.dim() == 2 else behavior_pool,
+                    item_emb,
+                    behavior_pool.unsqueeze(1),
                 )
                 combined = torch.cat([interest, item_emb[:, :emb_dim]], dim=-1)
                 return torch.sigmoid(self_inner.fc(combined)).squeeze(-1)

@@ -21,6 +21,8 @@ class RecMetrics:
     - rec_model_inference_ms: 模型推理耗时 (histogram)
     """
 
+    _MAX_HISTOGRAM_SIZE = 10000  # 每个 histogram 最大保留样本数
+
     def __init__(self):
         self._counters: dict[str, float] = {}
         self._histograms: dict[str, list[float]] = {}
@@ -28,7 +30,7 @@ class RecMetrics:
     def record_latency(self, label: str, value_ms: float) -> None:
         """记录延迟。"""
         key = f"latency:{label}"
-        self._histograms.setdefault(key, []).append(value_ms)
+        self._append_histogram(key, value_ms)
 
     def record_count(self, label: str, value: float = 1.0) -> None:
         """记录计数。"""
@@ -37,7 +39,14 @@ class RecMetrics:
 
     def record_histogram(self, name: str, value: float) -> None:
         """记录直方图。"""
-        self._histograms.setdefault(name, []).append(value)
+        self._append_histogram(name, value)
+
+    def _append_histogram(self, key: str, value: float) -> None:
+        """追加 histogram 值，超过上限时截断保留最新样本。"""
+        lst = self._histograms.setdefault(key, [])
+        lst.append(value)
+        if len(lst) > self._MAX_HISTOGRAM_SIZE:
+            self._histograms[key] = lst[-self._MAX_HISTOGRAM_SIZE // 2:]
 
     def get_counter(self, label: str) -> float:
         return self._counters.get(f"count:{label}", 0)
@@ -48,9 +57,11 @@ class RecMetrics:
         if not values:
             return {"p50": 0, "p99": 0, "max": 0, "count": 0}
         sorted_v = sorted(values)
+        p50_idx = (len(sorted_v) - 1) * 50 // 100
+        p99_idx = min((len(sorted_v) - 1) * 99 // 100, len(sorted_v) - 1)
         return {
-            "p50": sorted_v[len(sorted_v) // 2],
-            "p99": sorted_v[int(len(sorted_v) * 0.99)],
+            "p50": sorted_v[p50_idx],
+            "p99": sorted_v[p99_idx],
             "max": sorted_v[-1],
             "count": len(sorted_v),
         }

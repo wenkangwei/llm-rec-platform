@@ -37,7 +37,7 @@ async def chat_http(req: ChatRequest, request: Request) -> ChatHTTPResponse:
 
     通过自然语言控制推荐链路策略和查询监控指标。
     """
-    manager = request.app.state.chat_manager
+    manager = getattr(request.app.state, "chat_manager", None)
     if not manager:
         return ChatHTTPResponse(session_id="error", reply="对话服务未初始化")
 
@@ -57,7 +57,7 @@ async def chat_http(req: ChatRequest, request: Request) -> ChatHTTPResponse:
 @router.post("/chat/stream")
 async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
     """SSE 流式对话接口。"""
-    manager = request.app.state.chat_manager
+    manager = getattr(request.app.state, "chat_manager", None)
     if not manager:
         return StreamingResponse(
             _sse_error("对话服务未初始化"),
@@ -91,7 +91,7 @@ async def chat_websocket(websocket: WebSocket):
     """
     await websocket.accept()
     session_id = None
-    chat_manager = websocket.app.state.chat_manager
+    chat_manager = getattr(websocket.app.state, "chat_manager", None)
 
     if not chat_manager:
         await websocket.send_json({"error": "对话服务未初始化"})
@@ -115,7 +115,6 @@ async def chat_websocket(websocket: WebSocket):
                 continue
 
             # 创建或获取会话
-            nonlocal session_id
             if not session_id:
                 session = chat_manager.create_session(user_id)
                 session_id = session.session_id

@@ -13,7 +13,8 @@ logger = get_struct_logger("recall.merger")
 class RecallMerger(PipelineStage):
     """多路召回合并器。
 
-    并行执行所有启用的召回通道，合并去重后输出统一候选集。
+    顺序执行所有启用的召回通道，合并去重后输出统一候选集。
+    生产环境可升级为 asyncio.gather 并行执行。
     """
 
     def __init__(self):

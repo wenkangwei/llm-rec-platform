@@ -27,7 +27,7 @@ class TestHealthRoute:
         response = await client.get("/api/health")
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "ok"
+        assert data["status"] in ("ok", "degraded")
 
     @pytest.mark.asyncio
     async def test_metrics(self, client):

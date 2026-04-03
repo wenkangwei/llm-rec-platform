@@ -1,6 +1,6 @@
 # LLM-Rec-Platform 阶段性工作总结
 
-> 更新时间: 2026-04-03
+> 更新时间: 2026-04-04
 
 ---
 
@@ -11,7 +11,7 @@
 - **仓库地址**: git@github.com:wenkangwei/llm-rec-platform.git
 - **分支**: main
 - **Python 文件数**: ~120 个源文件
-- **测试**: 289 passed, 2 skipped
+- **测试**: 508 passed, 1 skipped
 
 ---
 
@@ -107,7 +107,13 @@
 | `test_sinks.py` | 12 | FileSink/ClickHouseSink/StdoutSink/TrainingSink |
 | `test_model_service.py` | 11 | ModelServiceABC/ModelManager(register/unregister/reload/predict/warmup/shutdown) |
 | `test_storage.py` | 12 | RedisStore/MySQLStore/ClickHouseStore/全局Redis单例 |
-| `test_server.py` | ~8 | health/metrics/recommend/search/track/middleware（需 fastapi） |
+| `test_feature.py` | 72 | FeatureDef/FeatureGroupDef/FeatureRegistry/FeatureLineage/FeatureValidator/ContextFeatureStore/StoreRouter/DSL Parser/DSLExecutor/FeatureComposer/FeatureCache |
+| `test_feature_extended.py` | 35 | UserProfile/ItemProfile/ContextProfile/FeaturePlatform/FeatureCatalog/FeatureVersionManager/FeatureLifecycle/OfflineFeatureGenerator/FeatureStats/FeatureBackfill/FeatureServer/FeatureFetchPlugin |
+| `test_server.py` | 8 | health/metrics/recommend/search/track/CORS/request_id |
+| `test_server_middleware.py` | 14 | AuthMiddleware(6)/ErrorHandlerMiddleware(2)/LoggingMiddleware(1)/RateLimitMiddleware(2)/RequestIDMiddleware(3) |
+| `test_server_routes.py` | 16 | health(3)/recommend(3)/search(2)/track(2)/social(2)/chat(4) |
+| `test_feature_store.py` | 16 | RedisFeatureStore(8)/MySQLFeatureStore(8) |
+| `test_uncovered_modules.py` | 44 | Settings/TrainingLogger/TorchModel/ONNXModel/TwoTower/DCN/DIN/LightGBM/CrossLayer/AttentionLayer/UserTower/ItemTower |
 | `tests/integration/` | 5 | 完整链路/HTTP→Response/搜索/降级/通道隔离 |
 | `tests/e2e/` | ~14 | FastAPI 真实 HTTP 端点（需 fastapi） |
 | `tests/conftest.py` | — | 共享 fixtures |
@@ -171,6 +177,36 @@
 
 **修复**: 缺少 `base_url` 时抛出 `ValueError`，强制要求配置。
 
+### 9. chat.py 语法错误 — nonlocal 声明顺序（已修复）
+
+**问题**: `chat_websocket()` 函数中 `nonlocal session_id` 出现在赋值之后，Python 语法错误导致模块无法导入。
+
+**修复**: 移除 `nonlocal` 声明，直接使用外层作用域的 `session_id` 变量（`while` 循环外已定义 `session_id = None`）。
+
+### 10. chat.py 直接属性访问导致 AttributeError（已修复）
+
+**问题**: `chat_http()` 和 `chat_stream()` 直接访问 `request.app.state.chat_manager`，当 lifespan 未初始化该属性时抛出 `AttributeError`。
+
+**修复**: 改用 `getattr(request.app.state, "chat_manager", None)` 带默认值访问。
+
+### 11. RecMetrics p99 计算错误 + 内存无限增长（已修复）
+
+**问题**: `get_histogram_summary()` 的 p99 索引 `int(len(sorted_v) * 0.99)` 在小样本时不准确（10 个元素返回 max 而非 p99）。`_histograms` 的 list 持续追加不清理，高负载下内存泄漏。
+
+**修复**: 改用 `(len(sorted_v) - 1) * 99 // 100` 计算百分位索引。新增 `_MAX_HISTOGRAM_SIZE=10000` 上限，超限时截断保留最新一半样本。
+
+### 12. ModelManager.reload() 竞态条件（已修复）
+
+**问题**: `old_model = self._models.get(name)` 在锁外读取，并发 reload 时可能获取过期引用。
+
+**修复**: 将 `old_model` 读取移入 `with self._lock` 块内。
+
+### 13. DIN 模型 forward 维度错误（已修复）
+
+**问题**: DIN.forward 中 item_emb 和 behavior_pool 都被 `unsqueeze(1)` 变成 `[B, 1, D]`，传给 AttentionLayer 后 item_emb 又被 `unsqueeze(1)` 变成 `[B, 1, 1, D]`，导致 RuntimeError。
+
+**修复**: forward 中只对 behavior_pool 做 unsqueeze，item_emb 保持 2D 传入 AttentionLayer。
+
 ---
 
 ## 四、Git 提交记录
@@ -207,15 +243,13 @@ f0c8a94 feat: Phase 1 — 项目骨架 + 配置中心 + 协议定义 + 核心抽
 
 | 模块 | 文件数 | 原因 |
 |------|--------|------|
-| `feature/` | 23 | 完整特征平台，需要数据仓库环境 |
-| `server/middleware/` | 5 | 需要 fastapi/starlette |
-| `server/routes/` | 6 | 需要 fastapi |
-| `server/lifespan.py` | 1 | 需要完整依赖 |
-| `server/grpc_server.py` | 1 | 需要 grpc |
-| `pipeline/model_service/backends/` (torch/onnx) | 2 | 需要 torch/onnxruntime |
-| `pipeline/model_service/models/` (torch模型) | 4 | 需要 torch |
+| `server/lifespan.py` | 1 | 需要完整依赖启动生命周期 |
+| `server/grpc_server.py` | 1 | 空占位文件，无实现代码 |
 | `storage/faiss.py` | 1 | 需要 faiss C++ 库 |
 | `scripts/` | 4 | 需要训练数据 |
+| `feature/store/faiss_store.py` | 1 | 空占位文件 |
+| `feature/store/hive_store.py` | 1 | 空占位文件 |
+| `llm/backends/triton_backend.py` | 1 | 空占位文件 |
 
 ### 功能增强方向
 
@@ -231,7 +265,7 @@ f0c8a94 feat: Phase 1 — 项目骨架 + 配置中心 + 协议定义 + 核心抽
 
 | 项目 | 状态 |
 |------|------|
-| 单元测试 | 289 passed（15 个测试文件，覆盖核心模块） |
+| 单元测试 | 508 passed（21 个测试文件，全部核心模块 + 模型服务 + 特征平台 + 服务端全覆盖） |
 | 集成测试 | 5 个端到端链路测试 |
 | E2E 测试 | ~14 个 HTTP 端点测试（需 fastapi） |
 | CI/CD | GitHub Actions 已配置 |
@@ -241,10 +275,9 @@ f0c8a94 feat: Phase 1 — 项目骨架 + 配置中心 + 协议定义 + 核心抽
 
 ## 六、下一步计划
 
-1. **安装完整依赖** — `pip install -e ".[dev]"` 解锁 E2E 测试和应用启动
-2. **Docker 部署验证** — `make docker-up` 启动完整服务栈
-3. **接入真实 LLM 后端** — 配置 vLLM 推理服务，替换 MockBackend
-4. **填充训练数据** — 准备 Parquet 格式训练样本
-5. **性能压测** — 验证 P99 < 200ms / QPS ≥ 1000 目标
-6. **补全 feature 模块测试** — 特征平台 23 个文件需要测试覆盖
-7. **补全 server 模块测试** — middleware/routes 需要 fastapi 环境支持
+1. **Docker 部署验证** — `make docker-up` 启动完整服务栈
+2. **接入真实 LLM 后端** — 配置 vLLM 推理服务，替换 MockBackend
+3. **填充训练数据** — 准备 Parquet 格式训练样本
+4. **性能压测** — 验证 P99 < 200ms / QPS ≥ 1000 目标
+5. **补全空占位模块** — faiss_store / hive_store / triton_backend 实际实现
+6. **lifespan 集成测试** — 需要完整依赖启动生命周期验证

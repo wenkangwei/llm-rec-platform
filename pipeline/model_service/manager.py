@@ -48,16 +48,16 @@ class ModelManager:
         灰度切换：先加载新模型到内存，验证通过后切换流量。
         """
         logger.info(f"热更新模型: {name}")
-        old_model = self._models.get(name)
 
-        # 预热新模型
+        # 预热新模型（在锁外执行，避免长时间持锁）
         new_model.warmup()
 
         with self._lock:
+            old_model = self._models.get(name)
             self._models[name] = new_model
             logger.info(f"模型切换完成: {name} -> v{new_model.version()}")
 
-        # 延迟卸载旧模型
+        # 延迟卸载旧模型（锁外执行）
         if old_model:
             try:
                 old_model.shutdown()

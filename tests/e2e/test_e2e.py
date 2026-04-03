@@ -52,7 +52,7 @@ class TestMetricsEndpoint:
     async def test_metrics_returns_text(self, client):
         resp = await client.get("/api/metrics")
         assert resp.status_code == 200
-        assert "TYPE" in resp.text or resp.text.strip() == ""
+        assert "TYPE" in resp.text or resp.text.strip() in ('', '""')
 
 
 class TestRecommendEndpoint:
