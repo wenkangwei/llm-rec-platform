@@ -82,7 +82,9 @@ class PipelineExecutor:
                 elapsed_ms = (time.perf_counter() - start) * 1000
                 add_stage_metrics(ctx, stage_name, elapsed_ms, input_count, 0, {"error": str(e)})
                 logger.error(f"阶段异常: {stage_name}", error=str(e))
-                # 单阶段失败不阻塞链路，继续执行
+                # 标记降级
+                ctx.degraded = True
+                ctx.degraded_stages.append(stage_name)
 
         return ctx
 

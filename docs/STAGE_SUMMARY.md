@@ -11,7 +11,7 @@
 - **仓库地址**: git@github.com:wenkangwei/llm-rec-platform.git
 - **分支**: main
 - **Python 文件数**: 187
-- **测试**: 115 passed, 2 skipped (需 fastapi)
+- **测试**: 194 passed, 2 skipped (需 fastapi)
 
 ---
 
@@ -101,15 +101,19 @@
 
 | 文件 | 测试数 | 覆盖范围 |
 |------|--------|----------|
-| `tests/unit/test_utils.py` | 13 | hash/logger/timer |
+| `tests/unit/test_utils.py` | 15 | hash/logger/timer |
 | `tests/unit/test_configs.py` | 17 | deep_merge/get_nested/load_yaml/ref_resolution/类型保留/AppConfig |
-| `tests/unit/test_protocols.py` | 17 | RecContext/Item/Request/Response/Converters |
-| `tests/unit/test_pipeline.py` | 21 | ContextUtils/PipelineStage/PipelineExecutor/RecallMerger/HotRecall/ReRank/Mixer |
-| `tests/unit/test_llm.py` | 16 | MockBackend/ChatSessionManager/意图分类/实体提取 |
-| `tests/unit/test_monitor.py` | 12 | RecTracer/SchemaStructures |
-| `tests/unit/test_server.py` | ~10 | health/metrics/recommend/search/track/middleware（需 fastapi） |
+| `tests/unit/test_protocols.py` | 19 | RecContext/Item/Request/Response/Converters |
+| `tests/unit/test_pipeline.py` | 28 | ContextUtils/PipelineStage/PipelineExecutor/RecallMerger/HotRecall/ReRank/Mixer/降级标记 |
+| `tests/unit/test_llm.py` | 25 | MockBackend/ChatSessionManager/意图分类/实体提取/会话过期/Factory |
+| `tests/unit/test_monitor.py` | 11 | RecTracer/SchemaStructures |
+| `tests/unit/test_agent.py` | 30 | AgentTask/Step/Result/PlannerAgent/CriticAgent/ReActAgent/PipelineControlTool/MonitorQueryTool/ConfigUpdateTool |
+| `tests/unit/test_sinks.py` | 12 | FileSink/ClickHouseSink/StdoutSink/TrainingSink |
+| `tests/unit/test_model_service.py` | 11 | ModelServiceABC/ModelManager(register/unregister/reload/predict/warmup/shutdown) |
+| `tests/unit/test_storage.py` | 12 | RedisStore/MySQLStore/ClickHouseStore/全局Redis单例 |
+| `tests/unit/test_server.py` | ~8 | health/metrics/recommend/search/track/middleware（需 fastapi） |
 | `tests/integration/test_integration.py` | 5 | 完整链路/HTTP→Response/搜索/降级/通道隔离 |
-| `tests/e2e/test_e2e.py` | 18 | FastAPI 真实 HTTP 端点（需 fastapi） |
+| `tests/e2e/test_e2e.py` | ~14 | FastAPI 真实 HTTP 端点（需 fastapi） |
 | `tests/conftest.py` | — | 共享 fixtures |
 
 ### 工程化基础设施
@@ -152,6 +156,30 @@
 
 `SearchResponse` 新增 `summary: Optional[str] = None`，搜索路由支持 LLM 生成的摘要透传。
 
+### 5. ClickHouseSink 无客户端时缓冲区不清理（已修复）
+
+**问题**: `ClickHouseSink._flush()` 在无 client 时直接 return，不清理 `_buffer`，导致内存持续增长。
+
+**修复**: 无 client 时仍执行 `_buffer.clear()`。
+
+### 6. ChatSessionManager 会话无限增长（已修复）
+
+**问题**: `_sessions` dict 无 TTL、无上限，长时间运行后内存泄漏。
+
+**修复**: 新增 `session_ttl`（默认 3600s）和 `max_sessions`（默认 1000）参数，`create_session` 自动淘汰最旧会话，`get_session` 检查过期。
+
+### 7. Pipeline 执行失败无降级标记（已修复）
+
+**问题**: 单阶段失败后链路继续执行，但调用方无法感知哪些阶段降级。
+
+**修复**: `RecContext` 新增 `degraded: bool` 和 `degraded_stages: list[str]`，`PipelineExecutor.execute()` 在捕获异常时设置。
+
+### 8. LLMFactory 硬编码 base_url fallback（已修复）
+
+**问题**: `LLMFactory.create()` 在配置缺少 `base_url` 时静默使用 `localhost:8001`，生产环境可能连错服务。
+
+**修复**: 缺少 `base_url` 时抛出 `ValueError`，强制要求配置。
+
 ---
 
 ## 四、Git 提交记录
@@ -167,7 +195,7 @@ a275a34 feat: Phase 2 — 推荐链路核心完整实现
 f0c8a94 feat: Phase 1 — 项目骨架 + 配置中心 + 协议定义 + 核心抽象
 ```
 
-**待提交**: 配置加载器类型保留修复 + 召回模块 Redis fallback + README 更新 + CI/CD + Makefile + E2E 测试 + conftest.py
+**待提交**: 测试补全 + 会话过期 + 降级标记 + Factory 校验 + ClickHouseSink 修复
 
 ---
 
@@ -197,7 +225,7 @@ f0c8a94 feat: Phase 1 — 项目骨架 + 配置中心 + 协议定义 + 核心抽
 
 | 项目 | 状态 |
 |------|------|
-| 单元测试覆盖 | 核心模块已覆盖（utils/configs/protocols/pipeline/llm/monitor） |
+| 单元测试覆盖 | 核心模块已覆盖（utils/configs/protocols/pipeline/llm/monitor/agent/sinks/model_service/storage） |
 | 集成测试 | 5 个端到端链路测试 |
 | E2E 测试 | 18 个 HTTP 端点测试（需 fastapi） |
 | CI/CD | GitHub Actions 已配置 |

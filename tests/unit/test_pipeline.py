@@ -169,7 +169,7 @@ class TestPipelineExecutor:
         assert result.candidates[0].id == "i1"
 
     def test_error_stage_isolation(self):
-        """单阶段失败不阻塞链路。"""
+        """单阶段失败不阻塞链路，且标记降级。"""
         executor = PipelineExecutor()
         error = ErrorStage()
         recall = FakeRecallStage([Item(id="i1", score=0.9)], "recall")
@@ -180,6 +180,20 @@ class TestPipelineExecutor:
         result = asyncio.get_event_loop().run_until_complete(executor.execute(ctx))
         # error_stage 失败但 recall 仍然执行
         assert len(result.candidates) == 1
+        # 降级标记
+        assert result.degraded is True
+        assert "error_stage" in result.degraded_stages
+
+    def test_no_degradation_when_all_succeed(self):
+        """全部成功时无降级标记。"""
+        executor = PipelineExecutor()
+        recall = FakeRecallStage([Item(id="i1", score=0.9)], "recall")
+        executor.register(recall)
+
+        ctx = create_context(user_id="u1")
+        result = asyncio.get_event_loop().run_until_complete(executor.execute(ctx))
+        assert result.degraded is False
+        assert result.degraded_stages == []
 
     def test_stage_metrics_recorded(self):
         executor = PipelineExecutor()

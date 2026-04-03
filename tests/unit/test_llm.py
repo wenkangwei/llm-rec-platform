@@ -1,14 +1,16 @@
-"""llm 模块单元测试 — MockBackend / ChatSessionManager / Agent"""
+"""llm 模块单元测试 — MockBackend / ChatSessionManager / Agent / Factory"""
 
 from __future__ import annotations
 
 import asyncio
+import time
 
 import pytest
 
 from llm.backends.mock_backend import MockBackend
 from llm.chat.manager import ChatSessionManager
 from llm.chat.schemas import IntentType
+from llm.factory import LLMFactory
 
 
 class TestMockBackend:
@@ -132,3 +134,54 @@ class TestIntentClassification:
     def test_entity_extraction_number(self, manager):
         entities = manager._extract_entities("权重调到0.3")
         assert entities.get("value") == 0.3
+
+
+class TestChatSessionExpiry:
+    """会话过期和淘汰测试。"""
+
+    @pytest.fixture
+    def manager(self):
+        return ChatSessionManager(MockBackend(), pipeline_state={}, session_ttl=1, max_sessions=3)
+
+    def test_expired_session_returns_none(self, manager):
+        session = manager.create_session("user1")
+        session.updated_at = time.time() - 10  # 已过期
+        assert manager.get_session(session.session_id) is None
+
+    def test_cleanup_expired(self, manager):
+        s1 = manager.create_session("u1")
+        s2 = manager.create_session("u2")
+        s1.updated_at = time.time() - 10
+        count = manager.cleanup_expired_sessions()
+        assert count == 1
+        assert manager.get_session(s2.session_id) is not None
+
+    def test_max_sessions_eviction(self, manager):
+        sessions = [manager.create_session(f"u{i}") for i in range(4)]
+        # max_sessions=3, 创建第 4 个时淘汰最旧
+        assert len(manager._sessions) == 3
+
+
+class TestLLMFactory:
+    """LLM Factory 测试。"""
+
+    def test_create_mock(self):
+        backend = LLMFactory.create({"type": "mock"})
+        assert isinstance(backend, MockBackend)
+
+    def test_create_vllm_requires_base_url(self):
+        with pytest.raises(ValueError, match="base_url"):
+            LLMFactory.create({"type": "openai_compatible"})
+
+    def test_create_vllm_with_config(self):
+        backend = LLMFactory.create({
+            "type": "openai_compatible",
+            "base_url": "http://vllm:8000/v1",
+            "api_key": "test-key",
+        })
+        assert backend._base_url == "http://vllm:8000/v1"
+        assert backend._api_key == "test-key"
+
+    def test_create_unsupported_type(self):
+        with pytest.raises(ValueError, match="不支持"):
+            LLMFactory.create({"type": "triton"})

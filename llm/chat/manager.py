@@ -38,14 +38,21 @@ _INTENT_KEYWORDS: dict[IntentType, list[str]] = {
 }
 
 
+_DEFAULT_SESSION_TTL = 3600  # 会话默认过期时间（秒）
+_MAX_SESSIONS = 1000  # 最大会话数
+
+
 class ChatSessionManager:
     """对话会话管理器：意图识别 → 工具调用 → 结果反馈。"""
 
-    def __init__(self, llm: LLMBackend, pipeline_state: dict[str, Any] | None = None):
+    def __init__(self, llm: LLMBackend, pipeline_state: dict[str, Any] | None = None,
+                 session_ttl: int = _DEFAULT_SESSION_TTL, max_sessions: int = _MAX_SESSIONS):
         self._llm = llm
         self._sessions: dict[str, ChatSession] = {}
         self._pipeline_state = pipeline_state or {}
         self._metrics_store: dict[str, Any] = {}
+        self._session_ttl = session_ttl
+        self._max_sessions = max_sessions
 
         # 初始化工具
         self._tools: list[Tool] = [
@@ -59,6 +66,13 @@ class ChatSessionManager:
 
     def create_session(self, user_id: str) -> ChatSession:
         """创建新会话。"""
+        self.cleanup_expired_sessions()
+
+        # 达到上限时淘汰最旧会话
+        if len(self._sessions) >= self._max_sessions:
+            oldest_id = min(self._sessions, key=lambda k: self._sessions[k].updated_at)
+            del self._sessions[oldest_id]
+
         session_id = generate_request_id()
         now = time.time()
         session = ChatSession(
@@ -71,8 +85,23 @@ class ChatSessionManager:
         return session
 
     def get_session(self, session_id: str) -> ChatSession | None:
-        """获取会话。"""
-        return self._sessions.get(session_id)
+        """获取会话（已过期返回 None）。"""
+        session = self._sessions.get(session_id)
+        if session and time.time() - session.updated_at > self._session_ttl:
+            del self._sessions[session_id]
+            return None
+        return session
+
+    def cleanup_expired_sessions(self) -> int:
+        """清理过期会话，返回清理数量。"""
+        now = time.time()
+        expired = [
+            sid for sid, s in self._sessions.items()
+            if now - s.updated_at > self._session_ttl
+        ]
+        for sid in expired:
+            del self._sessions[sid]
+        return len(expired)
 
     async def chat(self, session_id: str, user_message: str) -> str:
         """处理用户消息，返回回复。"""

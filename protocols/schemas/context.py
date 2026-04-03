@@ -47,3 +47,7 @@ class RecContext:
     # 分页
     page: int = 0
     page_size: int = 20
+
+    # 降级标记
+    degraded: bool = False
+    degraded_stages: list[str] = field(default_factory=list)

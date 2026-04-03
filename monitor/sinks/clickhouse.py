@@ -53,7 +53,10 @@ class ClickHouseSink:
             await self._flush()
 
     async def _flush(self) -> None:
-        if not self._buffer or not self._client:
+        if not self._buffer:
+            return
+        if not self._client:
+            self._buffer.clear()
             return
         try:
             columns = list(self._buffer[0].keys())
