@@ -221,6 +221,33 @@ python -m mkdocs build
 
 ---
 
+## TODO
+
+### P2 — 性能优化
+
+- [ ] 推荐链路推理性能优化 — 召回通道并行化、batch 推理、TensorRT/ONNX 加速、特征预取缓存
+- [ ] 召回通道并行化 — `RecallMerger` 串行改 `asyncio.gather` 并行
+
+### P2 — 功能补全
+
+- [ ] DSL 引擎函数补全 — 补齐 if/case/sum/avg/max/min/dot/cosine_sim/split/contains/len
+- [ ] 多轮对话上下文管理 — Chat 会话上下文记忆和多轮追问
+- [ ] RAG 知识库 — Agent 基于运维文档检索回答问题
+- [ ] Agent 更多工具 — 日志分析、异常检测、模型性能对比
+
+### P3 — 代码质量
+
+- [ ] `__init__.py` 导出优化 — 51 个空文件补充 re-export
+- [ ] 静默异常改进 — `except Exception: pass` 加 debug 日志
+
+### P4 — 新系统开发
+
+- [ ] C++ ONNX 模型部署优化 — C++ + ONNX Runtime 重写排序推理服务，提升吞吐
+- [ ] 前端推荐 APP — 类似小红书的视频/图文推荐 APP，瀑布流 Feed + 交互
+- [ ] 内容抓取供给系统 — 自动化内容采集管道，抓取/清洗/入库/去重/标签提取
+
+---
+
 ## License
 
 MIT
