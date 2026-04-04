@@ -11,14 +11,57 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 
+from utils.logger import get_struct_logger
+
+logger = get_struct_logger("scripts.train_ranking")
+
 
 class RankDataset(Dataset):
-    """排序训练数据集。"""
+    """排序训练数据集。
 
-    def __init__(self, data_path: str):
-        # TODO: 从 Parquet 加载训练样本
-        # 格式: features (concat user+item+context), label (clicked)
-        self.samples: list[tuple[np.ndarray, int]] = []
+    支持从 Parquet 文件或直接传入 numpy 数组加载。
+    """
+
+    def __init__(self, data_path: str = "", samples: list | None = None):
+        if samples is not None:
+            self.samples: list[tuple[np.ndarray, int]] = samples
+        elif data_path and os.path.exists(data_path):
+            self.samples = self._load_from_parquet(data_path)
+        else:
+            logger.warning(f"训练数据路径不存在或为空: {data_path}，生成随机样本")
+            self.samples = self._generate_dummy_samples(2000, 256)
+
+    def _load_from_parquet(self, data_path: str) -> list[tuple[np.ndarray, int]]:
+        """从 Parquet 文件加载训练样本。
+
+        预期格式: features (concat user+item+context), label (clicked)
+        """
+        try:
+            import pandas as pd
+            df = pd.read_parquet(data_path)
+            samples = []
+            for _, row in df.iterrows():
+                features = np.array(row.get("features", []), dtype=np.float32)
+                label = int(row.get("label", 0))
+                if features.size > 0:
+                    samples.append((features, label))
+            logger.info(f"从 Parquet 加载 {len(samples)} 训练样本", path=data_path)
+            return samples
+        except ImportError:
+            logger.warning("pandas/pyarrow 未安装，生成随机样本")
+            return self._generate_dummy_samples(2000, 256)
+        except Exception as e:
+            logger.error(f"Parquet 加载失败", error=str(e))
+            return self._generate_dummy_samples(2000, 256)
+
+    def _generate_dummy_samples(self, n: int, dim: int) -> list[tuple[np.ndarray, int]]:
+        """生成随机训练样本（用于测试/调试）。"""
+        samples = []
+        for _ in range(n):
+            feat = np.random.randn(dim).astype(np.float32)
+            label = np.random.randint(0, 2)
+            samples.append((feat, label))
+        return samples
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -68,11 +111,11 @@ def train(
             total_loss += loss.item()
 
         avg_loss = total_loss / max(len(loader), 1)
-        print(f"Epoch {epoch + 1}/{epochs} | Loss: {avg_loss:.4f}")
+        logger.info(f"Epoch {epoch + 1}/{epochs} | Loss: {avg_loss:.4f}")
 
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     torch.save(model.state_dict(), save_path)
-    print(f"模型已保存: {save_path}")
+    logger.info(f"模型已保存: {save_path}")
 
 
 if __name__ == "__main__":

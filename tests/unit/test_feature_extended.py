@@ -211,40 +211,125 @@ class TestFeatureLifecycle:
 # ===== Offline Stubs =====
 
 class TestOfflineFeatureGenerator:
-    def test_generate_user_features(self):
+    def test_generate_user_features_empty(self):
         gen = OfflineFeatureGenerator()
         assert gen.generate_user_features(["u1"]) == []
 
-    def test_generate_item_features(self):
+    def test_generate_user_features_with_data(self):
+        gen = OfflineFeatureGenerator()
+        gen.load_data("user", [
+            {"user_id": "u1", "action": "click", "category": "tech"},
+            {"user_id": "u1", "action": "collect", "category": "tech"},
+            {"user_id": "u1", "action": "share", "category": "sports"},
+        ])
+        result = gen.generate_user_features(["u1"])
+        assert len(result) == 1
+        assert result[0]["entity_id"] == "u1"
+        assert result[0]["click_count"] == 1
+        assert result[0]["collect_count"] == 1
+        assert result[0]["share_count"] == 1
+        assert result[0]["top_category"] == "tech"
+
+    def test_generate_item_features_empty(self):
         gen = OfflineFeatureGenerator()
         assert gen.generate_item_features(["i1"]) == []
 
-    def test_generate_cross_features(self):
+    def test_generate_item_features_with_data(self):
         gen = OfflineFeatureGenerator()
-        assert gen.generate_cross_features("u1", ["i1"]) == []
+        gen.load_data("item", [
+            {"item_id": "i1", "action": "expose"},
+            {"item_id": "i1", "action": "click"},
+            {"item_id": "i1", "action": "collect"},
+        ])
+        result = gen.generate_item_features(["i1"])
+        assert len(result) == 1
+        assert result[0]["entity_id"] == "i1"
+        assert result[0]["expose_count"] == 1
+        assert result[0]["click_count"] == 1
+        assert result[0]["ctr"] == 1.0
+
+    def test_generate_cross_features_no_data(self):
+        gen = OfflineFeatureGenerator()
+        result = gen.generate_cross_features("u1", ["i1"])
+        assert len(result) == 1
+        assert result[0]["has_interacted"] is False
+
+    def test_generate_cross_features_with_data(self):
+        gen = OfflineFeatureGenerator()
+        gen.load_data("cross", [
+            {"user_id": "u1", "item_id": "i1", "action": "click"},
+        ])
+        result = gen.generate_cross_features("u1", ["i1", "i2"])
+        assert len(result) == 2
+        assert result[0]["has_interacted"] is True
+        assert result[1]["has_interacted"] is False
 
 
 class TestFeatureStats:
-    def test_compute_coverage(self):
+    def test_compute_coverage_no_data(self):
         stats = FeatureStats()
-        result = stats.compute_coverage("age", sample_size=500)
+        result = stats.compute_coverage("age")
         assert result["feature"] == "age"
-        assert result["sample_size"] == 500
+        assert result["sample_size"] == 0
         assert result["coverage"] == 0.0
 
-    def test_compute_distribution(self):
+    def test_compute_coverage_with_data(self):
+        stats = FeatureStats()
+        stats.load_samples("age", [25, None, 30, "", 35])
+        result = stats.compute_coverage("age")
+        assert result["feature"] == "age"
+        assert result["sample_size"] == 5
+        assert result["coverage"] == 0.6  # 3/5
+
+    def test_compute_distribution_no_data(self):
         stats = FeatureStats()
         result = stats.compute_distribution("price")
         assert result["feature"] == "price"
         assert result["mean"] == 0.0
 
+    def test_compute_distribution_with_data(self):
+        stats = FeatureStats()
+        stats.load_samples("price", [10, 20, 30, 40, 50])
+        result = stats.compute_distribution("price")
+        assert result["feature"] == "price"
+        assert result["mean"] == 30.0
+        assert result["min"] == 10
+        assert result["max"] == 50
+        assert result["median"] == 30.0
+
+    def test_compute_multi_stats(self):
+        stats = FeatureStats()
+        stats.load_samples("f1", [1, 2, 3])
+        results = stats.compute_multi_stats(["f1", "f2"])
+        assert len(results) == 2
+
 
 class TestFeatureBackfill:
     @pytest.mark.asyncio
-    async def test_backfill(self):
+    async def test_backfill_empty_ids(self):
         bf = FeatureBackfill()
-        count = await bf.backfill("user", ["u1", "u2"], ["age"])
+        count = await bf.backfill("user", [], ["age"])
         assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_backfill_no_store(self):
+        bf = FeatureBackfill()
+        gen = OfflineFeatureGenerator()
+        bf.configure(generator=gen)
+        count = await bf.backfill("user", ["u1"], ["age"])
+        # 无原始数据，生成器返回空
+        assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_backfill_with_generator(self):
+        bf = FeatureBackfill(batch_size=10)
+        gen = OfflineFeatureGenerator()
+        gen.load_data("user", [
+            {"user_id": "u1", "action": "click", "category": "tech"},
+        ])
+        bf.configure(generator=gen)
+        count = await bf.backfill("user", ["u1"], ["click_count"])
+        assert count == 1  # 无 store 时 write 返回 len
 
 
 # ===== FeatureServer =====

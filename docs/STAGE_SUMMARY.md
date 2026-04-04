@@ -1,6 +1,6 @@
 # LLM-Rec-Platform 阶段性工作总结
 
-> 更新时间: 2026-04-04
+> 更新时间: 2026-04-05
 
 ---
 
@@ -11,7 +11,7 @@
 - **仓库地址**: git@github.com:wenkangwei/llm-rec-platform.git
 - **分支**: main
 - **Python 文件数**: ~120 个源文件
-- **测试**: 508 passed, 1 skipped
+- **测试**: 561 passed, 1 skipped
 
 ---
 
@@ -47,12 +47,14 @@
 |------|------|
 | `feature/registry/` | 特征注册中心（定义/分组/血缘/校验） |
 | `feature/store/` | 多存储后端（Redis/MySQL/Faiss/Context/Hive） |
+| `feature/store/faiss_store.py` | FaissFeatureStore（向量索引构建/相似度检索/暴力搜索降级） |
+| `feature/store/hive_store.py` | HiveFeatureStore（PyHive 连接/SQL 查询/批量读取） |
 | `feature/engine/` | DSL 特征引擎 |
 | `feature/profiles/` | 用户/物品/社交/上下文画像 |
 | `feature/manager/` | 特征管理（版本/目录/生命周期） |
 | `feature/server/` | 特征服务 + 插件 |
 | `feature/platform.py` | 统一 API 入口 |
-| `feature/offline/` | 离线特征（生成/统计/回填，需数据仓库环境） |
+| `feature/offline/` | 离线特征（生成/统计/回填，含数据加载和统计计算） |
 | `storage/` | Redis/MySQL/ClickHouse/Faiss 封装 |
 
 ### Phase 4 — LLM 融合
@@ -61,6 +63,7 @@
 |------|------|
 | `llm/base.py` + `llm/factory.py` | LLM 后端抽象（OpenAI 兼容协议），缺少 base_url 时强制报错 |
 | `llm/backends/` | vLLM/Mock/Triton 三种后端 |
+| `llm/backends/triton_backend.py` | TritonLLMBackend（tritonclient 降级为 Mock） |
 | `llm/agent/` | Agent 框架（base ABC + planner/executor/critic/monitor + ReAct Agent） |
 | `llm/agent/tools/` | 3 个工具（链路控制/监控查询/配置热更新） |
 | `llm/chat/manager.py` | ChatSessionManager（会话管理 + TTL过期 + max_sessions淘汰） |
@@ -85,7 +88,11 @@
 
 | 模块 | 内容 |
 |------|------|
-| `scripts/` | 训练脚本（双塔/排序模型/特征回填/embedding生成） |
+| `scripts/` | 训练脚本（双塔/排序模型/特征回填/embedding生成，含 Parquet 加载 + 随机样本降级） |
+| `pipeline/model_service/backends/triton_backend.py` | TritonModel 后端（tritonclient 降级为零输出） |
+| `server/grpc_server.py` | gRPC 服务框架（Servicer/创建/启动，需 grpcio + protobuf 编译） |
+| `server/routes/search.py` | 搜索路由 + LLM 搜索摘要生成 |
+| `server/routes/social.py` | 社交路由（Redis 存储 + 画像读取降级） |
 | `docker/` | Dockerfile + docker-compose.yaml（完整服务栈：rec-server/vLLM/Redis/MySQL/ClickHouse/Prometheus/Grafana） |
 | `docker/conf/prometheus.yml` | Prometheus 采集配置 |
 
@@ -108,12 +115,13 @@
 | `test_model_service.py` | 11 | ModelServiceABC/ModelManager(register/unregister/reload/predict/warmup/shutdown) |
 | `test_storage.py` | 12 | RedisStore/MySQLStore/ClickHouseStore/全局Redis单例 |
 | `test_feature.py` | 72 | FeatureDef/FeatureGroupDef/FeatureRegistry/FeatureLineage/FeatureValidator/ContextFeatureStore/StoreRouter/DSL Parser/DSLExecutor/FeatureComposer/FeatureCache |
-| `test_feature_extended.py` | 35 | UserProfile/ItemProfile/ContextProfile/FeaturePlatform/FeatureCatalog/FeatureVersionManager/FeatureLifecycle/OfflineFeatureGenerator/FeatureStats/FeatureBackfill/FeatureServer/FeatureFetchPlugin |
+| `test_feature_extended.py` | 43 | UserProfile/ItemProfile/ContextProfile/FeaturePlatform/FeatureCatalog/FeatureVersionManager/FeatureLifecycle/OfflineFeatureGenerator/FeatureStats/FeatureBackfill/FeatureServer/FeatureFetchPlugin |
 | `test_server.py` | 8 | health/metrics/recommend/search/track/CORS/request_id |
 | `test_server_middleware.py` | 14 | AuthMiddleware(6)/ErrorHandlerMiddleware(2)/LoggingMiddleware(1)/RateLimitMiddleware(2)/RequestIDMiddleware(3) |
 | `test_server_routes.py` | 16 | health(3)/recommend(3)/search(2)/track(2)/social(2)/chat(4) |
 | `test_feature_store.py` | 16 | RedisFeatureStore(8)/MySQLFeatureStore(8) |
 | `test_uncovered_modules.py` | 44 | Settings/TrainingLogger/TorchModel/ONNXModel/TwoTower/DCN/DIN/LightGBM/CrossLayer/AttentionLayer/UserTower/ItemTower |
+| `test_new_modules.py` | 45 | FaissFeatureStore/HiveFeatureStore/TritonLLM/TritonModel/gRPC Server/SearchSummary/SocialRoute/PairwiseDataset/RankDataset |
 | `tests/integration/` | 5 | 完整链路/HTTP→Response/搜索/降级/通道隔离 |
 | `tests/e2e/` | ~14 | FastAPI 真实 HTTP 端点（需 fastapi） |
 | `tests/conftest.py` | — | 共享 fixtures |
@@ -212,6 +220,7 @@
 ## 四、Git 提交记录
 
 ```
+b3cfad0 feat: 全面测试覆盖 + Bug 修复 — 508 tests 全通过
 2cb9aef test: 补全 LLM/Pipeline/Monitor/Utils 扩展测试覆盖
 0d932c0 feat: 补全测试覆盖 + 会话过期 + 降级标记 + Factory 校验
 a8b5db3 fix: 配置加载器类型保留 + 召回模块Redis fallback + 工程化基础设施
@@ -244,12 +253,8 @@ f0c8a94 feat: Phase 1 — 项目骨架 + 配置中心 + 协议定义 + 核心抽
 | 模块 | 文件数 | 原因 |
 |------|--------|------|
 | `server/lifespan.py` | 1 | 需要完整依赖启动生命周期 |
-| `server/grpc_server.py` | 1 | 空占位文件，无实现代码 |
 | `storage/faiss.py` | 1 | 需要 faiss C++ 库 |
-| `scripts/` | 4 | 需要训练数据 |
-| `feature/store/faiss_store.py` | 1 | 空占位文件 |
-| `feature/store/hive_store.py` | 1 | 空占位文件 |
-| `llm/backends/triton_backend.py` | 1 | 空占位文件 |
+| `scripts/` | 1 | `generate_embeddings.py` 需要 embedding 模型 |
 
 ### 功能增强方向
 
@@ -265,7 +270,7 @@ f0c8a94 feat: Phase 1 — 项目骨架 + 配置中心 + 协议定义 + 核心抽
 
 | 项目 | 状态 |
 |------|------|
-| 单元测试 | 508 passed（21 个测试文件，全部核心模块 + 模型服务 + 特征平台 + 服务端全覆盖） |
+| 单元测试 | 561 passed（22 个测试文件，全部核心模块 + 模型服务 + 特征平台 + 服务端全覆盖） |
 | 集成测试 | 5 个端到端链路测试 |
 | E2E 测试 | ~14 个 HTTP 端点测试（需 fastapi） |
 | CI/CD | GitHub Actions 已配置 |
@@ -279,5 +284,5 @@ f0c8a94 feat: Phase 1 — 项目骨架 + 配置中心 + 协议定义 + 核心抽
 2. **接入真实 LLM 后端** — 配置 vLLM 推理服务，替换 MockBackend
 3. **填充训练数据** — 准备 Parquet 格式训练样本
 4. **性能压测** — 验证 P99 < 200ms / QPS ≥ 1000 目标
-5. **补全空占位模块** — faiss_store / hive_store / triton_backend 实际实现
+5. **gRPC 服务启用** — 编译 protobuf + 注册 Servicer
 6. **lifespan 集成测试** — 需要完整依赖启动生命周期验证
