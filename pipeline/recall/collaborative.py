@@ -62,6 +62,6 @@ class CollaborativeRecall(PipelineStage):
                 raw = redis.get(f"item_sim:{item_id}")
                 if raw:
                     return [(r[0], r[1]) for r in json.loads(raw)]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Redis 不可用", error=str(e))
         return []

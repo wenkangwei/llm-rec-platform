@@ -19,6 +19,8 @@ services:
         condition: service_healthy
       mysql:
         condition: service_healthy
+      clickhouse:
+        condition: service_healthy
     restart: unless-stopped
     deploy:
       resources:
@@ -26,9 +28,10 @@ services:
           cpus: "4"
           memory: 8G
 
-  # ===== LLM 推理服务 (vLLM) =====
+  # ===== LLM 推理服务 (vLLM) — 需要 GPU，默认不启动 =====
   llm-server:
     image: vllm/vllm-openai:latest
+    profiles: ["gpu"]
     ports:
       - "8001:8000"
     environment:
@@ -86,6 +89,11 @@ services:
       - "9000:9000"   # Native
     environment:
       CLICKHOUSE_DB: rec_monitor
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 5s
+      retries: 5
+      start_period: 10s
     volumes:
       - ch-data:/var/lib/clickhouse
     restart: unless-stopped
@@ -106,6 +114,8 @@ services:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./conf/grafana/provisioning:/etc/grafana/provisioning
     depends_on:
       - prometheus
       - clickhouse

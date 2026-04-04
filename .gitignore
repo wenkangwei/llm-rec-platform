@@ -43,3 +43,6 @@ docker/conf/*.conf
 .pytest_cache/
 .coverage
 htmlcov/
+
+# MkDocs build output
+site/

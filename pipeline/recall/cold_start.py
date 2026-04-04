@@ -73,8 +73,8 @@ class ColdStartRecall(PipelineStage):
                 raw = redis.zrevrange("hot_items:global", 0, self._top_k - 1, withscores=True)
                 if raw:
                     return [(item_id, score) for item_id, score in raw]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Redis 不可用", error=str(e))
         return []
 
     def _get_explore_items(self, count: int) -> list[tuple[str, float]]:
@@ -86,8 +86,8 @@ class ColdStartRecall(PipelineStage):
                 item_ids = redis.srandmember("item_pool:all", count)
                 if item_ids:
                     return [(iid, random.uniform(0.3, 0.6)) for iid in item_ids]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Redis 不可用", error=str(e))
         return []
 
     def update_new_items(self, items: list[tuple[str, float]]) -> None:

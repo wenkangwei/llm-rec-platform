@@ -1,6 +1,6 @@
 # 存储后端配置
 redis:
-  host: "localhost"
+  host: "${env:REDIS_HOST:localhost}"
   port: 6379
   db: 0
   password: null
@@ -8,7 +8,7 @@ redis:
   timeout_ms: 100
 
 mysql:
-  host: "localhost"
+  host: "${env:MYSQL_HOST:localhost}"
   port: 3306
   user: "rec_user"
   password: "rec_pass"
@@ -16,7 +16,7 @@ mysql:
   pool_size: 5
 
 clickhouse:
-  host: "localhost"
+  host: "${env:CLICKHOUSE_HOST:localhost}"
   port: 9000
   user: "default"
   password: ""

@@ -103,8 +103,27 @@ class TestMonitorCollector:
 
 class TestTraceWriter:
     @pytest.mark.asyncio
-    async def test_write_not_implemented(self):
-        writer = TraceWriter()
+    async def test_write_is_abstract(self):
+        """TraceWriter 是 ABC，不能直接实例化。"""
+        with pytest.raises(TypeError):
+            TraceWriter()
+
+    @pytest.mark.asyncio
+    async def test_subclass_must_implement_write(self):
+        """子类必须实现 write 方法。"""
+        class IncompleteWriter(TraceWriter):
+            pass
+
+        with pytest.raises(TypeError):
+            IncompleteWriter()
+
+    @pytest.mark.asyncio
+    async def test_concrete_subclass_works(self):
+        """具体子类可以正常实例化和调用。"""
+        class StubWriter(TraceWriter):
+            async def write(self, trace):
+                pass
+
+        writer = StubWriter()
         trace = PipelineTrace(trace_id="t1", request_id="r1", user_id="u1", scene="home")
-        with pytest.raises(NotImplementedError):
-            await writer.write(trace)
+        await writer.write(trace)  # no error

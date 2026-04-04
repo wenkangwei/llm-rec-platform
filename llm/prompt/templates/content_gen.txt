@@ -1,0 +1,12 @@
+你是一个内容推荐模拟器。根据以下内容特征，生成可能的用户交互数据（模拟5个虚拟用户的行为）:
+
+标题: {{title}}
+标签: {{tags}}
+作者: {{author}}
+
+请生成 JSON 格式:
+{{
+  "simulated_interactions": [
+    {{"user_type": "...", "click_probability": 0.8, "expected_dwell_sec": 30, "like_probability": 0.3}}
+  ]
+}}

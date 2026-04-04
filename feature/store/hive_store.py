@@ -144,6 +144,6 @@ class HiveFeatureStore(FeatureStore):
         if self._connection:
             try:
                 self._connection.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Hive 连接失败", error=str(e))
             self._connection = None

@@ -23,3 +23,22 @@ message RecResponse {
   int32 total = 4;
   bool has_more = 5;
 }
+
+message SearchRequest {
+  rec.common.RequestHeader header = 1;
+  string query = 2;
+}
+
+message TrackRequest {
+  rec.common.RequestHeader header = 1;
+  string event_type = 2;
+  string item_id = 3;
+  map<string, string> extra = 4;
+}
+
+service RecommendationService {
+  rpc Recommend(RecRequest) returns (RecResponse);
+  rpc Search(SearchRequest) returns (RecResponse);
+  rpc Track(TrackRequest) returns (rec.common.Empty);
+  rpc HealthCheck(rec.common.Empty) returns (rec.common.Empty);
+}

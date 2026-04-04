@@ -227,6 +227,7 @@ class TestPipelineExecutor:
 
 class TestRecallMerger:
     def test_merge_multiple_channels(self):
+        import asyncio
         from pipeline.recall.merger import RecallMerger
 
         merger = RecallMerger()
@@ -240,7 +241,7 @@ class TestRecallMerger:
         ))
 
         ctx = create_context(user_id="u1")
-        result = merger.process(ctx)
+        result = asyncio.get_event_loop().run_until_complete(merger.process(ctx))
 
         # 去重后 3 个
         assert len(result.candidates) == 3
@@ -248,6 +249,7 @@ class TestRecallMerger:
         assert result.candidates[0].score >= result.candidates[1].score
 
     def test_source_stats(self):
+        import asyncio
         from pipeline.recall.merger import RecallMerger
 
         merger = RecallMerger()
@@ -257,10 +259,11 @@ class TestRecallMerger:
         ))
 
         ctx = create_context(user_id="u1")
-        result = merger.process(ctx)
+        result = asyncio.get_event_loop().run_until_complete(merger.process(ctx))
         assert result.extras["recall_sources"]["hot"] == 1
 
     def test_channel_error_isolation(self):
+        import asyncio
         from pipeline.recall.merger import RecallMerger
 
         merger = RecallMerger()
@@ -271,7 +274,7 @@ class TestRecallMerger:
         ))
 
         ctx = create_context(user_id="u1")
-        result = merger.process(ctx)
+        result = asyncio.get_event_loop().run_until_complete(merger.process(ctx))
         assert len(result.candidates) == 1  # error_stage 失败，hot 正常
 
 

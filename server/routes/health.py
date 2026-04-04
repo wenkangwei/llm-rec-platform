@@ -20,8 +20,9 @@ async def health_check(request: Request) -> HealthResponse:
         components.update(executor.health_check())
 
     # 存储健康检查
-    components["redis"] = getattr(request.app.state, "redis_connected", False)
-    components["mysql"] = getattr(request.app.state, "mysql_connected", False)
+    components["redis"] = getattr(request.app.state, "redis", None) is not None
+    components["mysql"] = getattr(request.app.state, "mysql", None) is not None
+    components["clickhouse"] = getattr(request.app.state, "clickhouse", None) is not None
 
     all_healthy = all(components.values()) if components else True
 

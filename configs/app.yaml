@@ -20,7 +20,7 @@ models:
 
 pipeline:
   stages: ${pipeline/pipeline.yaml:stages}
-  recall: ${pipeline/recall.yaml}
+  recall: ${pipeline/recall.yaml:channels}
   ranking: ${pipeline/ranking.yaml}
 
 features:
@@ -29,6 +29,11 @@ features:
 llm:
   backend: ${llm/llm.yaml:backend}
   models: ${llm/llm.yaml:models}
+  providers: ${llm/llm.yaml:providers}
+  routing: ${llm/llm.yaml:routing}
+
+experiment:
+  experiments: ${experiment/experiments.yaml:experiments}
 
 monitor:
   enabled: ${monitor/monitor.yaml:enabled}

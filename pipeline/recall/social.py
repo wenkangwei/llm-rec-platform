@@ -51,6 +51,6 @@ class SocialRecall(PipelineStage):
                     if raw:
                         results.extend((item_id, score, "interact") for item_id, score in raw)
                 return sorted(results, key=lambda x: -x[1])
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Redis 不可用", error=str(e))
         return []

@@ -1,20 +1,52 @@
-# LLM 配置（OpenAI 兼容协议）
-backend:
-  type: "openai_compatible"
-  base_url: "http://localhost:8001/v1"
-  api_key: "EMPTY"
-  timeout_sec: 30
-  max_retries: 2
+# LLM 多厂商配置 — 优先级列表 + 自动降级
+# priority 越小越优先，不可用时自动切到下一个
 
-models:
-  chat:
-    name: "qwen2.5-7b-instruct"
-    max_tokens: 2048
-    temperature: 0.7
-  embedding:
-    name: "bge-large-zh-v1.5"
-    dimension: 1024
-    batch_size: 32
+providers:
+  - name: "openai"
+    type: "openai_compatible"
+    base_url: "https://api.z.ai/api/coding/paas/v4"
+    api_key: "${env:GLM_API_KEY:}"
+    chat_model: "glm-4.7-flash"
+    embed_model: "text-embedding-3-small"
+    timeout_sec: 60
+    max_retries: 2
+    priority: 1
+  
+  - name: "ollama"
+    type: "openai_compatible"
+    base_url: "http://localhost:11434/v1"
+    api_key: "EMPTY"
+    chat_model: "qwen2.5:7b"
+    embed_model: "nomic-embed-text:latest"
+    timeout_sec: 30
+    max_retries: 2
+    priority: 2
+
+  - name: "vllm"
+    type: "openai_compatible"
+    base_url: "http://localhost:8001/v1"
+    api_key: "EMPTY"
+    chat_model: "qwen2.5-7b-instruct"
+    embed_model: "bge-large-zh-v1.5"
+    timeout_sec: 30
+    max_retries: 2
+    priority: 2
+
+  - name: "openai"
+    type: "openai_compatible"
+    base_url: "https://api.openai.com/v1"
+    api_key: "${env:OPENAI_API_KEY:}"
+    chat_model: "gpt-4o-mini"
+    embed_model: "text-embedding-3-small"
+    timeout_sec: 60
+    max_retries: 2
+    priority: 3
+
+# 路由策略
+routing:
+  strategy: "priority"
+  health_check_interval: 60
+  fallback_on_error: true
 
 agent:
   max_iterations: 5

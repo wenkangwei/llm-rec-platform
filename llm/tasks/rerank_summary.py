@@ -5,16 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from llm.base import LLMBackend
+from llm.prompt.manager import get_prompt_manager
 from utils.logger import get_struct_logger
 
 logger = get_struct_logger("llm.tasks.rerank_summary")
-
-_SUMMARY_PROMPT = """用户搜索了 "{query}"，用户兴趣是 {interests}。
-以下是一个搜索结果的内容摘要:
-{content}
-
-请基于用户兴趣，生成一个简洁的个性化摘要（不超过50字），突出与用户兴趣相关的内容点:
-"""
 
 
 class RerankSummary:
@@ -30,7 +24,8 @@ class RerankSummary:
         self, query: str, content: str, user_interests: list[str]
     ) -> str:
         """生成个性化搜索摘要。"""
-        prompt = _SUMMARY_PROMPT.format(
+        prompt = get_prompt_manager().render(
+            "rerank_summary",
             query=query,
             interests="、".join(user_interests[:5]),
             content=content[:500],

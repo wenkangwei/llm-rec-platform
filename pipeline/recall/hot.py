@@ -42,8 +42,8 @@ class HotRecall(PipelineStage):
                 if raw:
                     self._hot_items = [(item_id, score) for item_id, score in raw]
                     return self._hot_items
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Redis 不可用", error=str(e))
         logger.warning("Redis 不可用，使用内存缓存（可能为空）")
         return []
 

@@ -220,25 +220,37 @@ class TestGRPCServer:
         servicer = RecServiceServicer(executor)
         assert servicer._executor is executor
 
-    def test_recommend_not_implemented(self):
+    def test_recommend_returns_response(self):
+        from server.grpc_server import HAS_GRPC
         servicer = RecServiceServicer()
-        with pytest.raises(NotImplementedError):
-            servicer.Recommend(None, None)
+        mock_context = MagicMock()
+        response = servicer.Recommend(MagicMock(), mock_context)
+        if HAS_GRPC:
+            assert response is not None
 
-    def test_search_not_implemented(self):
+    def test_search_returns_response(self):
+        from server.grpc_server import HAS_GRPC
         servicer = RecServiceServicer()
-        with pytest.raises(NotImplementedError):
-            servicer.Search(None, None)
+        mock_context = MagicMock()
+        response = servicer.Search(MagicMock(), mock_context)
+        if HAS_GRPC:
+            assert response is not None
 
-    def test_track_not_implemented(self):
+    def test_track_returns_response(self):
+        from server.grpc_server import HAS_GRPC
         servicer = RecServiceServicer()
-        with pytest.raises(NotImplementedError):
-            servicer.Track(None, None)
+        mock_context = MagicMock()
+        response = servicer.Track(MagicMock(), mock_context)
+        if HAS_GRPC:
+            assert response is not None
 
-    def test_health_check_not_implemented(self):
+    def test_health_check_returns_response(self):
+        from server.grpc_server import HAS_GRPC
         servicer = RecServiceServicer()
-        with pytest.raises(NotImplementedError):
-            servicer.HealthCheck(None, None)
+        mock_context = MagicMock()
+        response = servicer.HealthCheck(MagicMock(), mock_context)
+        if HAS_GRPC:
+            assert response is not None
 
     def test_create_grpc_server_no_grpc(self):
         """无 grpcio 时返回 None。"""

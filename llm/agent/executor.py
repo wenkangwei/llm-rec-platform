@@ -6,6 +6,7 @@ from typing import Any
 
 from llm.agent.base import Agent, AgentResult, AgentTask, Step, Tool
 from llm.base import LLMBackend
+from llm.prompt.manager import get_prompt_manager
 from utils.logger import get_struct_logger
 
 logger = get_struct_logger("llm.agent.executor")
@@ -67,6 +68,32 @@ class ReActAgent(Agent):
             steps.append(step)
             prompt += f"\nObservation: {observation}\nThought:"
 
+        # 如果有 steps 但没有最终 answer，构造友好回复
+        if not answer and steps:
+            # 只取最后一个成功的工具结果（避免重复）
+            last_success = None
+            for s in reversed(steps):
+                if s.status == "success" and s.result:
+                    last_success = s
+                    break
+
+            if last_success and isinstance(last_success.result, dict):
+                import json
+                # 格式化为可读文本
+                lines = []
+                for k, v in last_success.result.items():
+                    if isinstance(v, dict):
+                        lines.append(f"- {k}:")
+                        for sk, sv in v.items():
+                            lines.append(f"  - {sk}: {sv}")
+                    else:
+                        lines.append(f"- {k}: {v}")
+                answer = "\n".join(lines)
+            elif last_success:
+                answer = str(last_success.result)
+            else:
+                answer = "未能获取到有效结果。"
+
         return AgentResult(task_id=task.task_id, answer=answer, steps=steps, success=True)
 
     def _build_initial_prompt(self, task: AgentTask) -> str:
@@ -75,19 +102,54 @@ class ReActAgent(Agent):
             f"- {t.name()}: {t.description()}"
             for t in self._tools.values()
         )
-        return (
-            f"你是一个推荐系统运维助手。用户需求: {task.description}\n"
-            f"可用工具:\n{tools_desc}\n"
-            f"请使用 Thought/Action/Observation 格式回答。\n"
-            f"Thought:"
+        return get_prompt_manager().render(
+            "executor", user_request=task.description, tools=tools_desc
         )
 
     def _parse_action(self, response: str) -> dict | None:
-        """解析 LLM 输出中的 Action。"""
+        """解析 LLM 输出中的 Action。
+
+        支持两种格式：
+        1. Action: tool_name\nAction Input: {"key": "val"}
+        2. Action: tool_name({"key": "val"})
+        """
+        import json
         import re
-        match = re.search(r"Action:\s*(\w+)\((.*)\)", response, re.IGNORECASE)
-        if match:
-            return {"tool": match.group(1), "params": {"raw": match.group(2)}}
+
+        # 格式 1: Action + Action Input 两行
+        action_match = re.search(r"Action:\s*(\w+)", response, re.IGNORECASE)
+        if action_match:
+            tool_name = action_match.group(1)
+            # 检查是否有 Action Input 行
+            input_match = re.search(
+                r"Action\s*Input:\s*(\{[^}]*\})", response, re.IGNORECASE
+            )
+            if input_match:
+                try:
+                    params = json.loads(input_match.group(1))
+                except json.JSONDecodeError:
+                    params = {"raw": input_match.group(1)}
+            else:
+                # 格式 2: Action: tool_name(params)
+                paren_match = re.search(
+                    r"Action:\s*\w+\((.*)\)", response, re.IGNORECASE
+                )
+                if paren_match:
+                    try:
+                        params = json.loads(paren_match.group(1))
+                    except json.JSONDecodeError:
+                        params = {"raw": paren_match.group(1)}
+                else:
+                    params = {}
+
+            # 过滤掉非工具名（如"使用"、"调用"等中文）
+            if tool_name in self._tools:
+                return {"tool": tool_name, "params": params}
+            # 尝试在 response 中找已知工具名
+            for name in self._tools:
+                if name.lower() in response.lower():
+                    return {"tool": name, "params": params}
+
         return None
 
     def _extract_answer(self, response: str) -> str:

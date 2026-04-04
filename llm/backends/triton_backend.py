@@ -159,6 +159,6 @@ class TritonLLMBackend(LLMBackend):
         if self._client:
             try:
                 self._client.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Triton 降级", error=str(e))
             self._client = None

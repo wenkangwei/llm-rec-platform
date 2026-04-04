@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
+
 from pipeline.base import PipelineStage
-from pipeline.context import dedup_items, sort_by_score, truncate_candidates
+from pipeline.context import dedup_items, sort_by_score
 from protocols.schemas.context import Item, RecContext
 from utils.logger import get_struct_logger
 
@@ -19,20 +21,50 @@ class RecallMerger(PipelineStage):
 
     def __init__(self):
         self._channels: list[PipelineStage] = []
+        self._load_channels_from_config()
 
     def name(self) -> str:
         return "recall"
 
+    def _load_channels_from_config(self) -> None:
+        """从配置文件自动加载召回通道。"""
+        try:
+            from configs.settings import get_settings
+            settings = get_settings()
+            recall_config = settings.raw.get("pipeline", {}).get("recall", {})
+            # recall 可能是 channels dict 本身，或包含 channels 子键
+            channels_config = recall_config.get("channels", recall_config)
+
+            for ch_name in sorted(channels_config.keys()):
+                ch_cfg = channels_config[ch_name]
+                if not ch_cfg.get("enabled", True):
+                    continue
+                class_path = ch_cfg.get("class", "")
+                if not class_path:
+                    continue
+                try:
+                    module_path, class_name = class_path.rsplit(".", 1)
+                    module = importlib.import_module(module_path)
+                    ch_cls = getattr(module, class_name)
+                    channel = ch_cls()
+                    self._channels.append(channel)
+                    logger.info(f"自动加载召回通道: {ch_name}", class_path=class_path)
+                except Exception as e:
+                    logger.error(f"加载召回通道失败: {ch_name}", error=str(e))
+        except Exception as e:
+            logger.warning(f"召回通道配置加载失败", error=str(e))
+
     def register_channel(self, channel: PipelineStage) -> None:
-        """注册召回通道。"""
+        """手动注册召回通道。"""
         self._channels.append(channel)
         logger.info(f"注册召回通道: {channel.name()}")
 
-    def process(self, ctx: RecContext) -> RecContext:
-        """执行所有召回通道并合并结果。"""
-        all_items: list[Item] = []
+    async def process(self, ctx: RecContext) -> RecContext:
+        """并行执行所有召回通道并合并结果。"""
+        import asyncio
 
-        for channel in self._channels:
+        async def _run_channel(channel: PipelineStage) -> list[Item]:
+            """运行单个召回通道。"""
             try:
                 channel_ctx = RecContext(
                     request_id=ctx.request_id,
@@ -44,12 +76,21 @@ class RecallMerger(PipelineStage):
                     query=ctx.query,
                 )
                 result = channel.process(channel_ctx)
+                if hasattr(result, "__await__"):
+                    result = await result
                 items = result.candidates
-                all_items.extend(items)
                 logger.debug(f"通道 {channel.name()} 召回 {len(items)} 条")
+                return items
             except Exception as e:
                 logger.error(f"召回通道异常: {channel.name()}", error=str(e))
-                # 单通道失败不阻塞
+                return []
+
+        # 并行执行所有通道
+        results = await asyncio.gather(*[_run_channel(ch) for ch in self._channels])
+
+        all_items: list[Item] = []
+        for items in results:
+            all_items.extend(items)
 
         ctx.candidates = all_items
         dedup_items(ctx)
@@ -83,5 +124,5 @@ class RecallMerger(PipelineStage):
         for ch in self._channels:
             try:
                 ch.shutdown()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"通道关闭异常", error=str(e))

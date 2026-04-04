@@ -48,6 +48,9 @@ async def chat_http(req: ChatRequest, request: Request) -> ChatHTTPResponse:
     if not session:
         session = manager.create_session(req.user_id)
 
+    # 注入运行时指标到 MonitorQueryTool
+    _inject_runtime_metrics(manager, request)
+
     # 处理消息
     reply = await manager.chat(session.session_id, req.message)
 
@@ -134,3 +137,40 @@ def _sse_event(event: str, data: str) -> str:
 
 async def _sse_error(msg: str):
     yield _sse_event("error", msg)
+
+
+def _inject_runtime_metrics(manager: Any, request: Request) -> None:
+    """将运行时指标注入到 MonitorQueryTool 的 metrics_store。"""
+    from utils.logger import get_struct_logger
+    _logger = get_struct_logger("routes.chat.metrics")
+
+    try:
+        metrics_store = None
+        for tool in manager._tools:
+            if hasattr(tool, "_metrics"):
+                metrics_store = tool._metrics
+                break
+        if metrics_store is None:
+            return
+
+        # 从 health 检查获取组件状态
+        health = getattr(request.app.state, "components_health", {})
+        metrics_store["components_health"] = health
+
+        # 从 PipelineExecutor 获取阶段信息
+        executor = getattr(request.app.state, "pipeline_executor", None)
+        if executor:
+            metrics_store["pipeline_stages"] = [s.name() for s in executor._stages]
+            metrics_store["pipeline_stage_count"] = len(executor._stages)
+            health_dict = executor.health_check()
+            metrics_store["pipeline_health"] = health_dict
+
+        # 实验状态
+        exp_mgr = getattr(request.app.state, "experiment_manager", None)
+        if exp_mgr:
+            exps = exp_mgr.list_experiments()
+            metrics_store["active_experiments"] = len(exps)
+            metrics_store["experiment_details"] = exps
+
+    except Exception as e:
+        _logger.debug(f"注入指标失败", error=str(e))

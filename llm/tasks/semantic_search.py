@@ -5,13 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from llm.base import LLMBackend
+from llm.prompt.manager import get_prompt_manager
 from utils.logger import get_struct_logger
 
 logger = get_struct_logger("llm.tasks.semantic_search")
-
-_QUERY_EXPAND_PROMPT = """用户搜索了 "{query}"。
-请生成5个相关的搜索扩展词（每行一个），帮助找到更多相关内容:
-"""
 
 
 class SemanticSearch:
@@ -27,7 +24,7 @@ class SemanticSearch:
 
     async def expand_query(self, query: str) -> list[str]:
         """扩展搜索 query。"""
-        prompt = _QUERY_EXPAND_PROMPT.format(query=query)
+        prompt = get_prompt_manager().render("query_expand", query=query)
         response = await self._llm.generate(prompt, max_tokens=200, temperature=0.5)
         # 解析每行
         lines = [line.strip() for line in response.split("\n") if line.strip()]

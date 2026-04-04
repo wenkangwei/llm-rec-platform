@@ -5,22 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from llm.base import LLMBackend
+from llm.prompt.manager import get_prompt_manager
 from utils.logger import get_struct_logger
 
 logger = get_struct_logger("llm.tasks.content_gen")
-
-_CONTENT_GEN_PROMPT = """你是一个内容推荐模拟器。根据以下内容特征，生成可能的用户交互数据（模拟5个虚拟用户的行为）:
-
-标题: {title}
-标签: {tags}
-作者: {author}
-
-请生成 JSON 格式:
-{{
-  "simulated_interactions": [
-    {{"user_type": "...", "click_probability": 0.8, "expected_dwell_sec": 30, "like_probability": 0.3}}
-  ]
-}}"""
 
 
 class ContentGenerator:
@@ -37,8 +25,8 @@ class ContentGenerator:
         self, title: str, tags: list[str], author: str = ""
     ) -> dict[str, Any]:
         """为新内容生成模拟交互数据。"""
-        prompt = _CONTENT_GEN_PROMPT.format(
-            title=title, tags=", ".join(tags), author=author
+        prompt = get_prompt_manager().render(
+            "content_gen", title=title, tags=", ".join(tags), author=author
         )
         response = await self._llm.generate(prompt)
 
@@ -49,7 +37,7 @@ class ContentGenerator:
             end = response.rfind("}") + 1
             if start >= 0 and end > start:
                 return json.loads(response[start:end])
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"JSON 解析失败", error=str(e))
 
         return {"simulated_interactions": []}

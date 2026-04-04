@@ -108,24 +108,53 @@ class TestIntentClassification:
         return ChatSessionManager(backend, pipeline_state={})
 
     def test_strategy_intent(self, manager):
-        intent = manager._classify_intent("关闭热门召回通道")
+        intent = manager._classify_intent_keyword("关闭热门召回通道")
         assert intent.type == IntentType.STRATEGY
 
     def test_monitor_intent(self, manager):
-        intent = manager._classify_intent("今天P99延迟多少")
+        intent = manager._classify_intent_keyword("今天P99延迟多少")
         assert intent.type == IntentType.MONITOR
 
     def test_debug_intent(self, manager):
-        intent = manager._classify_intent("分析一下用户123的推荐结果为什么偏少")
+        intent = manager._classify_intent_keyword("分析一下用户123的推荐结果为什么偏少")
         assert intent.type == IntentType.DEBUG
 
     def test_config_intent(self, manager):
-        intent = manager._classify_intent("配置参数和环境变量")
+        intent = manager._classify_intent_keyword("配置参数和环境变量")
         assert intent.type == IntentType.CONFIG
 
     def test_unknown_intent(self, manager):
-        intent = manager._classify_intent("你好世界")
+        intent = manager._classify_intent_keyword("你好世界")
         assert intent.type == IntentType.UNKNOWN
+
+    def test_parse_intent_response_valid(self, manager):
+        response = '{"intent": "monitor", "confidence": 0.95, "reason": "查询延迟指标"}'
+        intent = manager._parse_intent_response(response, "P99延迟多少")
+        assert intent.type == IntentType.MONITOR
+        assert intent.confidence == 0.95
+
+    def test_parse_intent_response_with_extra_text(self, manager):
+        response = '好的，分析结果如下：\n{"intent": "strategy", "confidence": 0.8, "reason": "关闭通道"}\n请查收'
+        intent = manager._parse_intent_response(response, "关闭通道")
+        assert intent.type == IntentType.STRATEGY
+
+    def test_parse_intent_response_invalid_json(self, manager):
+        intent = manager._parse_intent_response("not json at all", "关闭通道")
+        # 降级到关键词匹配
+        assert intent.type == IntentType.STRATEGY
+
+    def test_parse_intent_response_unknown_intent(self, manager):
+        response = '{"intent": "unknown", "confidence": 0.9, "reason": "闲聊"}'
+        intent = manager._parse_intent_response(response, "你好")
+        assert intent.type == IntentType.UNKNOWN
+
+    @pytest.mark.asyncio
+    async def test_classify_intent_llm_with_mock(self, manager):
+        """LLM 意图识别 + Mock 后端测试。"""
+        intent = await manager._classify_intent_llm("查看系统延迟指标")
+        # MockBackend 会返回固定文本，解析失败降级到关键词
+        # "延迟" 关键词命中 MONITOR
+        assert intent.type == IntentType.MONITOR
 
     def test_entity_extraction_user(self, manager):
         entities = manager._extract_entities("分析用户abc123")
@@ -184,4 +213,4 @@ class TestLLMFactory:
 
     def test_create_unsupported_type(self):
         with pytest.raises(ValueError, match="不支持"):
-            LLMFactory.create({"type": "triton"})
+            LLMFactory.create({"type": "nonexistent_backend"})

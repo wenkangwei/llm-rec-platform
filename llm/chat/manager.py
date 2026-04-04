@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 import time
 from typing import Any
 
@@ -12,30 +14,11 @@ from llm.agent.tools.monitor_query import MonitorQueryTool
 from llm.agent.tools.config_update import ConfigUpdateTool
 from llm.base import LLMBackend
 from llm.chat.schemas import ChatAction, ChatMessage, ChatSession, Intent, IntentType
+from llm.prompt.manager import get_prompt_manager
 from utils.hash import generate_request_id
 from utils.logger import get_struct_logger
 
 logger = get_struct_logger("llm.chat.manager")
-
-# 意图关键词映射
-_INTENT_KEYWORDS: dict[IntentType, list[str]] = {
-    IntentType.STRATEGY: [
-        "关闭", "启用", "开启", "调整", "权重", "召回", "排序",
-        "切换", "策略", "通道", "模型",
-    ],
-    IntentType.MONITOR: [
-        "延迟", "P99", "QPS", "覆盖率", "指标", "监控",
-        "性能", "耗时", "正常", "异常",
-    ],
-    IntentType.DEBUG: [
-        "分析", "为什么", "偏少", "推荐结果", "诊断", "调试",
-        "用户", "问题",
-    ],
-    IntentType.CONFIG: [
-        "配置", "版本", "回滚", "实验", "A/B", "参数",
-        "环境",
-    ],
-}
 
 
 _DEFAULT_SESSION_TTL = 3600  # 会话默认过期时间（秒）
@@ -114,16 +97,15 @@ class ChatSessionManager:
             role="user", content=user_message, timestamp=time.time()
         ))
 
-        # 意图识别
-        intent = self._classify_intent(user_message)
+        # 意图识别（LLM 语义识别，失败时降级到关键词）
+        intent = await self._classify_intent_llm(user_message)
         logger.info(f"意图识别: {intent.type.value}", confidence=intent.confidence)
 
         # 执行动作
         if intent.type == IntentType.UNKNOWN:
             # 直接用 LLM 回答
-            answer = await self._llm.generate(
-                f"你是推荐系统运维助手。用户问题: {user_message}\n请简洁回答:"
-            )
+            prompt = get_prompt_manager().render("chat_assistant", user_question=user_message)
+            answer = await self._llm.generate(prompt)
         else:
             # 通过 Agent 执行
             task = AgentTask(
@@ -142,10 +124,74 @@ class ChatSessionManager:
 
         return answer
 
-    def _classify_intent(self, message: str) -> Intent:
-        """基于关键词的意图分类。"""
+    async def _classify_intent_llm(self, message: str) -> Intent:
+        """基于 LLM 的语义意图分类，失败时降级到关键词匹配。"""
+        try:
+            prompt = get_prompt_manager().render(
+                "intent_classify", user_message=message
+            )
+            response = await self._llm.generate(prompt)
+            return self._parse_intent_response(response, message)
+        except Exception as e:
+            logger.warning(f"LLM 意图识别失败，降级到关键词匹配: {e}")
+            return self._classify_intent_keyword(message)
+
+    def _parse_intent_response(self, response: str, message: str) -> Intent:
+        """解析 LLM 返回的意图 JSON。"""
+        # 提取 JSON（兼容 LLM 输出多余文本的情况）
+        json_match = re.search(r'\{[^}]+\}', response)
+        if not json_match:
+            logger.warning(f"无法解析意图响应: {response[:200]}")
+            return self._classify_intent_keyword(message)
+
+        try:
+            data = json.loads(json_match.group())
+        except json.JSONDecodeError:
+            logger.warning(f"意图 JSON 解析失败: {json_match.group()}")
+            return self._classify_intent_keyword(message)
+
+        intent_str = data.get("intent", "unknown")
+        confidence = float(data.get("confidence", 0.0))
+        reason = data.get("reason", "")
+
+        # 映射到 IntentType
+        intent_map = {
+            "strategy": IntentType.STRATEGY,
+            "monitor": IntentType.MONITOR,
+            "debug": IntentType.DEBUG,
+            "config": IntentType.CONFIG,
+            "unknown": IntentType.UNKNOWN,
+        }
+        intent_type = intent_map.get(intent_str, IntentType.UNKNOWN)
+
+        entities = self._extract_entities(message)
+        logger.debug(f"LLM 意图: {intent_type.value}, confidence={confidence}, reason={reason}")
+        return Intent(type=intent_type, confidence=confidence, entities=entities)
+
+    @staticmethod
+    def _classify_intent_keyword(message: str) -> Intent:
+        """关键词兜底的意图分类。"""
+        _KEYWORDS: dict[IntentType, list[str]] = {
+            IntentType.STRATEGY: [
+                "关闭", "启用", "开启", "调整", "权重", "召回", "排序",
+                "切换", "策略", "通道", "模型",
+            ],
+            IntentType.MONITOR: [
+                "延迟", "P99", "QPS", "覆盖率", "指标", "监控",
+                "性能", "耗时", "正常", "异常",
+            ],
+            IntentType.DEBUG: [
+                "分析", "为什么", "偏少", "推荐结果", "诊断", "调试",
+                "用户", "问题",
+            ],
+            IntentType.CONFIG: [
+                "配置", "版本", "回滚", "实验", "A/B", "参数",
+                "环境",
+            ],
+        }
+
         scores: dict[IntentType, int] = {}
-        for intent_type, keywords in _INTENT_KEYWORDS.items():
+        for intent_type, keywords in _KEYWORDS.items():
             score = sum(1 for kw in keywords if kw in message)
             if score > 0:
                 scores[intent_type] = score
@@ -156,10 +202,7 @@ class ChatSessionManager:
         best_intent = max(scores, key=scores.get)
         total = sum(scores.values())
         confidence = scores[best_intent] / total if total > 0 else 0.0
-
-        # 提取简单实体
-        entities = self._extract_entities(message)
-        return Intent(type=best_intent, confidence=confidence, entities=entities)
+        return Intent(type=best_intent, confidence=confidence)
 
     @staticmethod
     def _extract_entities(message: str) -> dict[str, Any]:

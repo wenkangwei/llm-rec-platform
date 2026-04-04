@@ -51,3 +51,8 @@ class RecContext:
     # 降级标记
     degraded: bool = False
     degraded_stages: list[str] = field(default_factory=list)
+
+    # 实验分流
+    experiment_id: str = ""
+    variant_name: str = ""
+    experiment_overrides: dict[str, Any] = field(default_factory=dict)

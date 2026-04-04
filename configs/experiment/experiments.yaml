@@ -1,0 +1,18 @@
+# A/B 实验配置
+experiments:
+  - id: "recall_weight_v1"
+    name: "召回通道权重实验 V1"
+    layer: "recall"
+    enabled: true
+    variants:
+      - name: "control"
+        traffic_percent: 50
+        config: {}
+      - name: "boost_collaborative"
+        traffic_percent: 50
+        config:
+          recall:
+            collaborative:
+              weight: 0.35
+            personalized:
+              weight: 0.25

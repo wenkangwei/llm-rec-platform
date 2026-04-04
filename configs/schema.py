@@ -32,9 +32,18 @@ class MySQLConfig(BaseModel):
     pool_size: int = 5
 
 
+class ClickHouseConfig(BaseModel):
+    host: str = "localhost"
+    port: int = 9000
+    user: str = "default"
+    password: str = ""
+    database: str = "rec_monitor"
+
+
 class StorageConfig(BaseModel):
     redis: RedisConfig = Field(default_factory=RedisConfig)
     mysql: MySQLConfig = Field(default_factory=MySQLConfig)
+    clickhouse: ClickHouseConfig = Field(default_factory=ClickHouseConfig)
 
 
 class ModelConfig(BaseModel):
@@ -67,14 +76,55 @@ class LLMBackendConfig(BaseModel):
     max_retries: int = 2
 
 
+class LLMProviderConfig(BaseModel):
+    """单个 LLM 厂商配置。"""
+    name: str
+    type: str = "openai_compatible"
+    base_url: str = ""
+    api_key: str = "EMPTY"
+    chat_model: str = "qwen2.5:7b"
+    embed_model: str = ""
+    timeout_sec: int = 30
+    max_retries: int = 2
+    priority: int = 1
+    protocol: str = "grpc"  # triton 专用
+
+
+class LLMRoutingConfig(BaseModel):
+    """LLM 路由策略配置。"""
+    strategy: str = "priority"
+    health_check_interval: int = 60
+    fallback_on_error: bool = True
+
+
 class LLMConfig(BaseModel):
     backend: LLMBackendConfig = Field(default_factory=LLMBackendConfig)
+    providers: list[LLMProviderConfig] = Field(default_factory=list)
+    routing: LLMRoutingConfig = Field(default_factory=LLMRoutingConfig)
 
 
 class MonitorConfig(BaseModel):
     enabled: bool = True
     sinks: list[dict[str, Any]] = Field(default_factory=list)
     metrics: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExperimentVariantConfig(BaseModel):
+    name: str
+    traffic_percent: float = 50.0
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExperimentDefConfig(BaseModel):
+    id: str
+    name: str
+    layer: str = "default"
+    enabled: bool = True
+    variants: list[ExperimentVariantConfig] = Field(default_factory=list)
+
+
+class ExperimentConfig(BaseModel):
+    experiments: list[ExperimentDefConfig] = Field(default_factory=list)
 
 
 class AppConfig(BaseModel):
@@ -86,6 +136,7 @@ class AppConfig(BaseModel):
     features: dict[str, Any] = Field(default_factory=dict)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     monitor: MonitorConfig = Field(default_factory=MonitorConfig)
+    experiment: ExperimentConfig = Field(default_factory=ExperimentConfig)
 
 
 def validate_config(raw_config: dict[str, Any]) -> AppConfig:

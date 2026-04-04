@@ -56,13 +56,14 @@ class TestHealthRoute:
         mock_executor = MagicMock()
         mock_executor.health_check.return_value = {"recall": True, "rank": True}
         app.state.pipeline_executor = mock_executor
-        app.state.redis_connected = True
-        app.state.mysql_connected = False
+        app.state.redis = MagicMock()  # 非 None 表示已连接
+        app.state.mysql = None  # None 表示未连接
+        app.state.clickhouse = None
 
         r = await client.get("/api/health")
         assert r.status_code == 200
         data = r.json()
-        assert data["status"] == "degraded"  # mysql=False
+        assert data["status"] == "degraded"  # mysql/clickhouse=False
         assert data["components"]["redis"] is True
         assert data["components"]["mysql"] is False
 

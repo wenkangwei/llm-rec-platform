@@ -27,6 +27,17 @@ class MonitorQueryTool(Tool):
         metric = params.get("metric", "all")
         time_range = params.get("time_range", "1h")
 
+        # 中文 metric 名映射
+        metric_map = {
+            "延迟": "latency", "延迟": "latency",
+            "QPS": "qps", "qps": "qps",
+            "召回覆盖率": "recall_coverage", "覆盖率": "recall_coverage",
+            "模型推理耗时": "latency", "推理耗时": "latency",
+            "全部": "all", "所有": "all",
+            "latency": "latency", "recall_coverage": "recall_coverage",
+        }
+        metric = metric_map.get(metric, metric)
+
         if metric == "all":
             return self._get_all_metrics(time_range)
         elif metric == "latency":
@@ -36,10 +47,11 @@ class MonitorQueryTool(Tool):
         elif metric == "qps":
             return self._get_qps()
         else:
-            return {"error": f"未知指标: {metric}"}
+            # 兜底：返回全部指标
+            return self._get_all_metrics(time_range)
 
     def _get_all_metrics(self, time_range: str) -> dict:
-        return {
+        result = {
             "latency_p99_ms": self._metrics.get("latency_p99_ms", 150),
             "qps": self._metrics.get("qps", 500),
             "recall_coverage": self._metrics.get("recall_coverage", 0.92),
@@ -47,6 +59,14 @@ class MonitorQueryTool(Tool):
             "time_range": time_range,
             "timestamp": time.time(),
         }
+        # 注入运行时指标
+        if "components_health" in self._metrics:
+            result["components"] = self._metrics["components_health"]
+        if "pipeline_health" in self._metrics:
+            result["pipeline_health"] = self._metrics["pipeline_health"]
+        if "active_experiments" in self._metrics:
+            result["active_experiments"] = self._metrics["active_experiments"]
+        return result
 
     def _get_latency(self) -> dict:
         return {

@@ -21,8 +21,9 @@ class PipelineExecutor:
     每个阶段独立计时，单阶段失败不影响整体请求。
     """
 
-    def __init__(self):
+    def __init__(self, experiment_manager=None):
         self._stages: list[PipelineStage] = []
+        self._experiment_manager = experiment_manager
 
     def register(self, stage: PipelineStage) -> None:
         """注册一个链路阶段。"""
@@ -62,6 +63,9 @@ class PipelineExecutor:
 
     async def execute(self, ctx: RecContext) -> RecContext:
         """执行完整链路。"""
+        # 实验分流：解析当前用户所属变体，写入 ctx
+        self._resolve_experiment(ctx)
+
         for stage in self._stages:
             stage_name = stage.name()
             start = time.perf_counter()
@@ -87,6 +91,24 @@ class PipelineExecutor:
                 ctx.degraded_stages.append(stage_name)
 
         return ctx
+
+    def _resolve_experiment(self, ctx: RecContext) -> None:
+        """解析实验分流，将变体配置写入 ctx。"""
+        if not self._experiment_manager:
+            return
+
+        for exp_id, exp in self._experiment_manager._experiments.items():
+            variant = self._experiment_manager.get_variant(exp_id, ctx.user_id)
+            if variant:
+                ctx.experiment_id = exp_id
+                ctx.variant_name = variant.name
+                ctx.experiment_overrides = variant.config
+                logger.debug(
+                    f"实验分流: {exp_id}",
+                    variant=variant.name,
+                    user_id=ctx.user_id,
+                )
+                break
 
     @staticmethod
     async def _run_stage(stage: PipelineStage, ctx: RecContext) -> RecContext:

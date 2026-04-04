@@ -1,0 +1,126 @@
+site_name: LLM 推荐系统平台
+site_description: LLM 驱动的智能推荐系统运维平台技术文档
+site_author: LLM Rec Platform Team
+copyright: Copyright &copy; 2024-2026 LLM Rec Platform
+
+theme:
+  name: material
+  language: zh
+  font:
+    text: Noto Sans SC
+    code: JetBrains Mono
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: 切换暗色模式
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: 切换亮色模式
+
+plugins:
+  - search:
+      lang: [zh, en]
+  - mermaid2
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid
+  - pymdownx.tabbed
+  - pymdownx.tasklist
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - tables
+  - footnotes
+
+nav:
+  - 首页: index.md
+  - 快速开始:
+      - 环境安装: quickstart/installation.md
+      - 第一个请求: quickstart/first-request.md
+      - Docker 部署: quickstart/docker-deploy.md
+  - 教程:
+      - 自定义推荐链路: tutorials/custom-pipeline.md
+      - LLM 多厂商集成: tutorials/llm-integration.md
+      - 特征平台使用: tutorials/feature-platform.md
+      - A/B 实验配置: tutorials/ab-testing.md
+      - 智能对话运维: tutorials/agent-chat.md
+  - 架构指南:
+      - 系统总览: architecture/overview.md
+      - 推荐流水线: architecture/pipeline.md
+      - LLM 模块: architecture/llm-module.md
+      - 配置系统: architecture/config-system.md
+      - 存储层: architecture/storage.md
+      - 监控追踪: architecture/monitoring.md
+  - API 参考:
+      - 推荐接口: api/recommend.md
+      - 搜索接口: api/search.md
+      - 对话接口: api/chat.md
+      - 实验接口: api/experiment.md
+      - LLM 状态: api/llm-status.md
+      - 行为追踪: api/track.md
+      - 社交接口: api/social.md
+      - 健康检查: api/health.md
+  - 模块详解:
+      - 推荐流水线:
+          - PipelineExecutor: modules/pipeline/executor.md
+          - 召回模块: modules/pipeline/recall.md
+          - 排序模块: modules/pipeline/ranking.md
+          - 混排模块: modules/pipeline/mixer.md
+          - 场景模块: modules/pipeline/scene.md
+          - 模型服务: modules/pipeline/model-service.md
+      - LLM 模块:
+          - 后端抽象: modules/llm/backends.md
+          - 多厂商路由: modules/llm/router.md
+          - Agent 框架: modules/llm/agent.md
+          - 对话系统: modules/llm/chat.md
+          - Prompt 管理: modules/llm/prompt.md
+          - LLM 任务: modules/llm/tasks.md
+      - 特征平台:
+          - 特征注册: modules/feature/registry.md
+          - 特征存储: modules/feature/store.md
+          - 特征引擎: modules/feature/engine.md
+          - 特征画像: modules/feature/profiles.md
+      - 实验框架: modules/experiment.md
+      - 监控追踪: modules/monitor.md
+      - 配置系统: modules/config.md
+      - 协议与数据结构: modules/protocols.md
+      - 工具函数: modules/utils.md
+  - 部署指南:
+      - 本地开发: deployment/local-dev.md
+      - Docker Compose: deployment/docker-compose.md
+      - GPU LLM 部署: deployment/gpu-llm.md
+      - 生产环境: deployment/production.md
+      - 监控栈: deployment/monitoring-stack.md
+  - 关于:
+      - 更新日志: about/changelog.md
+      - 路线图: about/roadmap.md

@@ -8,6 +8,8 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 
 from configs.settings import get_settings
+from experiment.manager import ExperimentManager
+from experiment.models import Experiment, ExperimentVariant
 from llm.factory import LLMFactory
 from pipeline.executor import PipelineExecutor
 from utils.logger import get_struct_logger
@@ -25,29 +27,66 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.settings = settings
     app.state.components_health = {}
 
-    # 初始化 LLM 后端
+    # 初始化 LLM 后端（多 provider 路由 + 自动降级）
     try:
-        llm_config = settings.raw.get("llm", {}).get("backend", {})
-        # 开发环境默认使用 mock
-        import os
-        env = os.environ.get("APP_ENV", "development")
-        if env == "development":
-            from llm.backends.mock_backend import MockBackend
-            llm_backend = MockBackend()
+        llm_config = settings.raw.get("llm", {})
+        providers = llm_config.get("providers", [])
+
+        if providers:
+            # 新配置：多 provider 路由
+            llm_backend = LLMFactory.create_router(llm_config)
         else:
-            llm_backend = LLMFactory.create(llm_config)
+            # 兼容旧配置：单 backend
+            backend_cfg = llm_config.get("backend", {})
+            llm_backend = LLMFactory.create(backend_cfg)
+
         await llm_backend.warmup()
         app.state.llm_backend = llm_backend
         app.state.components_health["llm"] = True
         logger.info("LLM 后端初始化完成")
     except Exception as e:
-        logger.error("LLM 后端初始化失败", error=str(e))
-        app.state.llm_backend = None
-        app.state.components_health["llm"] = False
+        logger.error("LLM 后端初始化失败，降级到 Mock", error=str(e))
+        from llm.backends.mock_backend import MockBackend
+        llm_backend = MockBackend()
+        await llm_backend.warmup()
+        app.state.llm_backend = llm_backend
+        app.state.components_health["llm"] = True
+
+    # 初始化 ExperimentManager（在 Pipeline 之前，因为 Pipeline 需要引用）
+    try:
+        exp_manager = ExperimentManager()
+        exp_configs = settings.raw.get("experiment", {}).get("experiments", [])
+        for exp_cfg in exp_configs:
+            if not exp_cfg.get("enabled", True):
+                continue
+            variants = [
+                ExperimentVariant(
+                    name=v["name"],
+                    traffic_percent=v.get("traffic_percent", 50.0),
+                    config=v.get("config", {}),
+                )
+                for v in exp_cfg.get("variants", [])
+            ]
+            exp = Experiment(
+                id=exp_cfg["id"],
+                name=exp_cfg.get("name", exp_cfg["id"]),
+                variants=variants,
+            )
+            exp_manager.create_experiment(exp)
+            exp_manager.start_experiment(exp.id)
+            logger.info(f"实验加载并启动: {exp.id}")
+        app.state.experiment_manager = exp_manager
+        app.state.components_health["experiment"] = True
+        logger.info("ExperimentManager 初始化完成", experiments=len(exp_manager._experiments))
+    except Exception as e:
+        logger.error("ExperimentManager 初始化失败", error=str(e))
+        app.state.experiment_manager = None
+        app.state.components_health["experiment"] = False
 
     # 初始化 PipelineExecutor
     try:
-        executor = PipelineExecutor()
+        exp_mgr = getattr(app.state, "experiment_manager", None)
+        executor = PipelineExecutor(experiment_manager=exp_mgr)
         pipeline_config = settings.raw.get("pipeline", {})
         stage_configs = pipeline_config.get("stages", [])
         if stage_configs:
@@ -80,10 +119,72 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.chat_manager = None
         app.state.components_health["chat"] = False
 
-    # 存储连接（需要实际服务时启用）
-    app.state.redis = None
-    app.state.mysql = None
-    app.state.clickhouse = None
+    # 初始化存储连接（连接失败不崩溃，graceful degradation）
+    storage_config = settings.validated.storage
+
+    # Redis
+    try:
+        from storage.redis import RedisStore, set_redis
+        redis_conf = storage_config.redis
+        redis_store = RedisStore(
+            host=redis_conf.host, port=redis_conf.port, db=redis_conf.db,
+            password=redis_conf.password, pool_size=redis_conf.pool_size,
+        )
+        await redis_store.connect()
+        app.state.redis = redis_store
+
+        # 同步 Redis 客户端（召回模块需要 zrevrange 等同步操作）
+        import redis as sync_redis
+        sync_client = sync_redis.Redis(
+            host=redis_conf.host, port=redis_conf.port, db=redis_conf.db,
+            password=redis_conf.password, decode_responses=True,
+        )
+        sync_client.ping()
+        set_redis(sync_client)
+
+        app.state.components_health["redis"] = True
+        logger.info("Redis 连接完成")
+    except Exception as e:
+        logger.warning("Redis 连接失败，使用降级模式", error=str(e))
+        app.state.redis = None
+        app.state.components_health["redis"] = False
+
+    # MySQL
+    try:
+        from storage.mysql import MySQLStore
+        mysql_conf = storage_config.mysql
+        mysql_store = MySQLStore(
+            host=mysql_conf.host, port=mysql_conf.port,
+            user=mysql_conf.user, password=mysql_conf.password,
+            database=mysql_conf.database, pool_size=mysql_conf.pool_size,
+        )
+        await mysql_store.connect()
+        app.state.mysql = mysql_store
+        app.state.components_health["mysql"] = True
+        logger.info("MySQL 连接完成")
+    except Exception as e:
+        logger.warning("MySQL 连接失败，使用降级模式", error=str(e))
+        app.state.mysql = None
+        app.state.components_health["mysql"] = False
+
+    # ClickHouse
+    try:
+        from storage.clickhouse import ClickHouseStore
+        ch_conf = storage_config.clickhouse
+        ch_store = ClickHouseStore(
+            host=ch_conf.host, port=ch_conf.port,
+            user=ch_conf.user, password=ch_conf.password,
+            database=ch_conf.database,
+        )
+        await ch_store.async_connect()
+        app.state.clickhouse = ch_store
+        app.state.components_health["clickhouse"] = True
+        logger.info("ClickHouse 连接完成")
+    except Exception as e:
+        logger.warning("ClickHouse 连接失败，使用降级模式", error=str(e))
+        app.state.clickhouse = None
+        app.state.components_health["clickhouse"] = False
+
     app.state.model_manager = None
 
     app.state.components_health["config"] = True
@@ -103,6 +204,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await app.state.redis.close()
     if app.state.mysql:
         await app.state.mysql.close()
+    if app.state.clickhouse:
+        await app.state.clickhouse.async_close()
 
     # 卸载模型
     if app.state.model_manager:

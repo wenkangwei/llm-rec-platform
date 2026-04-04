@@ -56,3 +56,15 @@ class PromptManager:
             for f in self._template_dir.glob("*.txt"):
                 templates.add(f.stem)
         return sorted(templates)
+
+
+# 全局单例
+_manager: PromptManager | None = None
+
+
+def get_prompt_manager() -> PromptManager:
+    """获取全局 PromptManager 单例。"""
+    global _manager
+    if _manager is None:
+        _manager = PromptManager()
+    return _manager

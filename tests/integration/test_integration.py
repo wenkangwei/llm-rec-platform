@@ -176,7 +176,7 @@ class TestEndToEndPipeline:
         hot.update_hot_items([(f"s_{i}", 1.0 / (i + 1)) for i in range(10)])
         merger.register_channel(hot)
 
-        ctx = merger.process(ctx)
+        ctx = asyncio.get_event_loop().run_until_complete(merger.process(ctx))
         resp = context_to_search_response(ctx)
 
         assert resp.query == "python教程"
@@ -220,7 +220,7 @@ class TestEndToEndPipeline:
         merger.register_channel(hot)
 
         ctx = create_context(user_id="u1")
-        result = merger.process(ctx)
+        result = asyncio.get_event_loop().run_until_complete(merger.process(ctx))
 
         # error_channel 失败，hot 正常
         assert any(item.source == "hot" for item in result.candidates)

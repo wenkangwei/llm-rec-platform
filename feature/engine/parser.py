@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any
 
@@ -18,6 +19,35 @@ _OPERATORS = {
     "**": lambda a, b: a ** b,
     "%": lambda a, b: a % b,
 }
+
+
+def _split_args(args_str: str) -> list[str]:
+    """按逗号分割参数，但保留引号内的逗号。"""
+    parts = []
+    current = []
+    in_quote = None
+    paren_depth = 0
+    for ch in args_str:
+        if ch in ('"', "'") and paren_depth == 0:
+            if in_quote == ch:
+                in_quote = None
+            elif in_quote is None:
+                in_quote = ch
+            current.append(ch)
+        elif ch == '(' and in_quote is None:
+            paren_depth += 1
+            current.append(ch)
+        elif ch == ')' and in_quote is None:
+            paren_depth -= 1
+            current.append(ch)
+        elif ch == ',' and in_quote is None and paren_depth == 0:
+            parts.append("".join(current))
+            current = []
+        else:
+            current.append(ch)
+    if current:
+        parts.append("".join(current))
+    return parts
 
 
 def parse_dsl(expression: str, context: dict[str, Any]) -> Any:
@@ -39,6 +69,10 @@ def parse_dsl(expression: str, context: dict[str, Any]) -> Any:
         return int(expression)
     except ValueError:
         pass
+
+    # 字符串字面量（引号包裹）
+    if len(expression) >= 2 and expression[0] in ('"', "'") and expression[-1] == expression[0]:
+        return expression[1:-1]
 
     if expression in context:
         return context[expression]
@@ -62,13 +96,29 @@ def _eval_function(name: str, args_str: str, context: dict[str, Any]) -> Any:
     """执行内置函数。"""
     import math
 
-    args = [parse_dsl(a.strip(), context) for a in args_str.split(",")]
+    args = [parse_dsl(a.strip(), context) for a in _split_args(args_str)]
     functions = {
+        # 原有 5 个
         "time_decay": lambda val, decay: val * (float(decay)),
         "bucketize": lambda val, boundaries: _bucketize(val, boundaries),
         "normalize": lambda val: val,
         "hash_encode": lambda val: hash(str(val)),
         "sigmoid": lambda val: 1 / (1 + math.exp(-val)),
+        # 条件函数
+        "if": lambda cond, true_val, false_val: true_val if cond else false_val,
+        "case": lambda *case_args: _case_function(*case_args),
+        # 聚合函数
+        "sum": lambda *vals: sum(float(v) for v in vals),
+        "avg": lambda *vals: sum(float(v) for v in vals) / len(vals) if vals else 0,
+        "max": lambda *vals: max(float(v) for v in vals) if vals else 0,
+        "min": lambda *vals: min(float(v) for v in vals) if vals else 0,
+        # 向量/交叉函数
+        "dot": lambda a, b: sum(x * y for x, y in zip(a, b)),
+        "cosine_sim": lambda a, b: _cosine_sim(a, b),
+        # 字符串函数
+        "split": lambda val, sep=" ": str(val).split(sep),
+        "contains": lambda val, sub: str(sub) in str(val),
+        "len": lambda val: len(val),
     }
 
     func = functions.get(name)
@@ -94,3 +144,28 @@ def _bucketize(value: float, boundaries: Any) -> int:
         if value < b:
             return i
     return len(boundaries)
+
+
+def _cosine_sim(a: list[float], b: list[float]) -> float:
+    """余弦相似度。"""
+    dot_val = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(x * x for x in b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot_val / (norm_a * norm_b)
+
+
+def _case_function(*args) -> Any:
+    """case(cond1, val1, cond2, val2, ..., default) — 依次判断条件，返回第一个为真对应的值。"""
+    i = 0
+    while i + 1 < len(args):
+        cond = args[i]
+        val = args[i + 1]
+        if cond:
+            return val
+        i += 2
+    # 奇数参数最后一个是 default
+    if len(args) % 2 == 1:
+        return args[-1]
+    return None
