@@ -7,7 +7,10 @@
 ## Highlights
 
 - **LLM-native 推荐架构** — 大语言模型深度融入推荐链路：语义 Embedding、新内容冷启动模拟、搜索结果个性化摘要
-- **对话式链路控制** — 自然语言对话实时控制推荐策略，支持「关闭热门召回」「调权重」「分析推荐结果」等指令
+- **对话式链路控制** — 自然语言对话实时控制推荐策略，支持「关闭热门召回」「调权重」「分析推荐结果」「数据库里有多少内容」等指令
+- **推荐测试直达** — 对话中直接执行推荐请求测试，展示各阶段耗时和 Top-N 结果，关键词直达毫秒级响应
+- **数据库查询分析** — Agent 直连 MySQL，支持内容池统计、来源分布、质量评分等数据查询，关键词直达毫秒级响应
+- **Web Chat UI** — 内置暗色主题聊天界面，浏览器直接与 Agent 对话，快捷操作按钮一键触发
 - **5 级推荐漏斗** — 多路召回 → 稡型粗排 → DNN 稡型精排 → 策略重排 → 混排
 - **LLM 多厂商路由** — 支持 Ollama/vLLM/OpenAI/Triton，优先级自动降级
 - **A/B 实验框架** — 确定性哈希分桶、多层实验、实时指标收集
@@ -41,7 +44,7 @@ flowchart TB
 
     subgraph LLM["LLM 模块"]
         LLMRouter["多厂商路由器<br/>Ollama / vLLM / OpenAI"]
-        Agent["ReAct Agent<br/>意图识别 + 工具调用"]
+        Agent["ReAct Agent<br/>意图识别 + 工具调用<br/>DB查询/链路控制/监控"]
         Chat["对话管理<br/>HTTP / SSE / WebSocket"]
     end
 
@@ -120,7 +123,7 @@ llm-rec-platform/
 |------|------|------|
 | POST | `/api/recommend` | 推荐请求 |
 | POST | `/api/search` | 搜索推荐（LLM 摘要） |
-| POST | `/api/chat` | HTTP 对话 |
+| POST | `/api/chat` | HTTP 对话（支持推荐测试、数据库查询、链路控制、监控等） |
 | POST | `/api/chat/stream` | SSE 流式对话 |
 | WS | `/api/ws/chat` | WebSocket 对话 |
 | POST | `/api/track` | 行为追踪 |
@@ -146,6 +149,7 @@ llm-rec-platform/
 | Phase 5 | 监控体系 + 链路追踪 + 日志落盘 | ✅ Done |
 | Phase 6 | 模型训练闭环 + A/B 测试 + 部署 | ✅ Done |
 | Phase 7 | 技术文档（MkDocs + 浏览器查看） | ✅ Done |
+| Phase 8 | Agent 推荐测试 + Web Chat UI + 查询缓存 | ✅ Done |
 
 ---
 
@@ -166,10 +170,27 @@ curl -X POST http://localhost:8000/api/recommend \
   -H "Content-Type: application/json" \
   -d '{"user_id": "u123", "scene": "home_feed", "num": 10}'
 
-# 5. LLM Agent 对话
+# 5. LLM Agent 对话（数据库查询、链路控制）
 curl -X POST http://localhost:8000/api/chat \
   -H "Content-Type: application/json" \
   -d '{"user_id": "admin", "message": "关闭热门召回通道"}'
+
+# 6. 数据库内容查询（毫秒级响应）
+curl -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "admin", "message": "数据库里有多少内容，各来源分布如何"}'
+
+# 7. 推荐测试（对话直达）
+curl -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "admin", "message": "跑一次推荐测试"}'
+
+# 8. Web Chat UI
+# 浏览器打开 http://localhost:8000/ 即可使用聊天界面
+
+# 9. 与 Content Supply Platform 联调
+# 先启动 content-supply（端口 8010），再同步内容到 Redis
+cd ../content-supply && python3.10 scripts/sync_to_rec.py --clean
 ```
 
 ### Docker Compose（完整服务栈）
@@ -244,7 +265,68 @@ python -m mkdocs build
 
 - [ ] C++ ONNX 模型部署优化 — C++ + ONNX Runtime 重写排序推理服务，提升吞吐
 - [ ] 前端推荐 APP — 类似小红书的视频/图文推荐 APP，瀑布流 Feed + 交互
-- [ ] 内容抓取供给系统 — 自动化内容采集管道，抓取/清洗/入库/去重/标签提取
+- [x] 内容抓取供给系统 — 自动化内容采集管道（已独立为 [content-supply](../content-supply/) 项目）
+
+---
+
+## 与 Content Supply 联调
+
+Content Supply Platform（内容供给中间件）通过共享 MySQL + Redis 与推荐系统对接：
+
+```
+Content Supply (8010)                    LLM Rec Platform (8001)
+────────────────────                     ──────────────────────
+crawl/jimeng ─┐
+crawl/url ────┤─→ MySQL (cs_items)
+crawl/feed ──┘       │
+                     ▼
+             sync_to_rec.py ─→ Redis ─→ HotRecall / ColdStartRecall
+                                    │
+                       item_pool:all (SET)
+                       hot_items:global (ZSET)
+                       item_feat:{id} (HASH)
+                       item_sim:{id} (JSON)
+```
+
+```bash
+# 1. 启动 Docker 服务栈（MySQL + Redis + ClickHouse）
+cd docker && docker compose up -d
+
+# 2. 启动 content-supply（MySQL 模式）
+cd ../content-supply
+DB_ENGINE=mysql python3.10 -m uvicorn content_supply.main:app --port 8010
+
+# 3. 抓取内容
+curl -X POST http://localhost:8010/crawl/jimeng     # 即梦 AI 作品
+curl -X POST http://localhost:8010/crawl/feed/1      # RSS 抓取
+
+# 4. 同步到 Redis
+python3.10 scripts/sync_to_rec.py --clean
+
+# 5. 获取推荐
+curl -X POST http://localhost:8001/api/recommend \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "user_001", "scene": "home", "num": 10}'
+
+# 6. 通过 Agent 查询数据库内容
+curl -X POST http://localhost:8001/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "admin", "message": "数据库里有多少内容"}'
+```
+
+---
+
+## Agent 工具一览
+
+| 工具 | 说明 | 延迟 |
+|------|------|------|
+| `db_query` | 数据库查询（内容统计/分布/来源/质量） | <10ms（直达） |
+| `recommend_test` | 推荐请求测试（执行推荐链路，返回各阶段耗时和结果） | ~200ms（直达） |
+| `pipeline_control` | 推荐链路控制（启用/关闭通道、调整权重） | 一次 LLM |
+| `monitor_query` | 监控指标查询（延迟/QPS/覆盖率） | 一次 LLM |
+| `config_update` | 配置更新（运行时参数调整） | 一次 LLM |
+
+数据库查询和推荐测试经关键词直达路径，**零次 LLM 调用**。非直达类问题走 ReAct Agent 循环。查询缓存自动复用近期结果（5 分钟 TTL，LRU 200 条）。
 
 ---
 

@@ -47,8 +47,9 @@ def create_app() -> FastAPI:
 
 def _register_routes(app: FastAPI) -> None:
     """注册所有路由模块。"""
-    from server.routes import chat, experiment, health, llm, recommend, search, social, track
+    from server.routes import chat, experiment, health, llm, recommend, search, social, track, webui
 
+    app.include_router(webui.router)
     app.include_router(health.router, prefix="/api", tags=["health"])
     app.include_router(recommend.router, prefix="/api", tags=["recommend"])
     app.include_router(search.router, prefix="/api", tags=["search"])

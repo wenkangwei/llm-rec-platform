@@ -46,3 +46,4 @@ htmlcov/
 
 # MkDocs build output
 site/
+content_supply.db

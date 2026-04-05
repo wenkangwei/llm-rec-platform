@@ -79,6 +79,7 @@ services:
       retries: 10
     volumes:
       - mysql-data:/var/lib/mysql
+      - ./init-sql:/docker-entrypoint-initdb.d
     restart: unless-stopped
 
   # ===== ClickHouse =====

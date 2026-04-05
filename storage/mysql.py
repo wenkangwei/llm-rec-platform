@@ -72,3 +72,17 @@ class MySQLStore:
             async with conn.cursor() as cur:
                 await cur.execute(sql, values)
                 return cur.rowcount
+
+    async def raw_query(self, sql: str, values: tuple = (), limit: int = 200) -> list[dict]:
+        """执行原始 SELECT 查询，返回字典列表。"""
+        import aiomysql
+        # 安全：只允许 SELECT
+        normalized = sql.strip().upper()
+        if not normalized.startswith("SELECT") and not normalized.startswith("SHOW") and not normalized.startswith("DESC"):
+            raise ValueError("raw_query only supports SELECT/SHOW/DESC statements")
+        if "LIMIT" not in normalized:
+            sql = f"{sql.rstrip(';')} LIMIT {limit}"
+        async with self._pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await cur.execute(sql, values)
+                return await cur.fetchall()

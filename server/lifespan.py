@@ -107,7 +107,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             pipeline_state = {
                 "channels": settings.raw.get("pipeline", {}).get("recall", {}).get("channels", {}),
             }
-            chat_manager = ChatSessionManager(app.state.llm_backend, pipeline_state)
+            chat_manager = ChatSessionManager(app.state.llm_backend, pipeline_state, mysql_store=None)
             app.state.chat_manager = chat_manager
             app.state.components_health["chat"] = True
             logger.info("ChatManager 初始化完成")
@@ -161,6 +161,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await mysql_store.connect()
         app.state.mysql = mysql_store
         app.state.components_health["mysql"] = True
+        # 注入 MySQL store 到 ChatManager 的 DBQueryTool
+        # 注入 PipelineExecutor 到 RecommendTestTool
+        if getattr(app.state, "chat_manager", None):
+            for tool in app.state.chat_manager._tools:
+                if hasattr(tool, "_mysql"):
+                    tool._mysql = mysql_store
+                if hasattr(tool, "_executor"):
+                    tool._executor = getattr(app.state, "pipeline_executor", None)
         logger.info("MySQL 连接完成")
     except Exception as e:
         logger.warning("MySQL 连接失败，使用降级模式", error=str(e))
